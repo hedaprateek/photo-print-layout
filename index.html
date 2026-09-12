@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Print Sheet — arrange photos for printing</title>
+<meta name="description" content="Arrange any number of photos onto A3, A4, 4×6 or identity-size sheets with the least wasted paper, enhance them for print, then print or save as PDF. Everything runs in your browser.">
+<meta name="theme-color" content="#11131a">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%236c8cff'/%3E%3Crect x='7' y='6' width='8' height='10' rx='1' fill='%23fff'/%3E%3Crect x='17' y='6' width='8' height='10' rx='1' fill='%23fff' opacity='.72'/%3E%3Crect x='7' y='18' width='18' height='8' rx='1' fill='%23fff' opacity='.45'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark" aria-hidden="true"></span>
+    <span class="brand-name">Print&nbsp;Sheet</span>
+  </div>
+  <p class="tagline">Pack photos onto paper with no wasted space</p>
+  <div class="topbar-actions">
+    <button id="btn-settings" class="btn btn-ghost" type="button">Settings</button>
+    <button id="btn-pdf" class="btn btn-ghost" type="button">Save PDF</button>
+    <button id="btn-print" class="btn btn-primary" type="button">Print</button>
+  </div>
+</header>
+
+<main class="shell">
+
+  <!-- ------------------------------------------------------ photo library -->
+  <aside class="panel panel-photos">
+    <h2 class="panel-title">Photos</h2>
+
+    <div id="dropzone" class="dropzone" tabindex="0" role="button"
+         aria-label="Add photos: click to choose files, or drop them here">
+      <strong>Drop photos here</strong>
+      <span>or click to choose — any number, any format</span>
+      <input id="file-input" type="file" accept="image/*" multiple hidden>
+    </div>
+
+    <div class="add-row">
+      <button id="btn-search" class="btn btn-soft" type="button">Search online</button>
+      <button id="btn-url" class="btn btn-soft" type="button">Add by URL</button>
+    </div>
+
+    <div class="library-head">
+      <span id="library-count" class="muted">No photos yet</span>
+      <button id="btn-clear" class="link-btn" type="button" hidden>Remove all</button>
+    </div>
+
+    <ul id="library" class="library"></ul>
+  </aside>
+
+  <!-- ---------------------------------------------------------- workspace -->
+  <section class="workspace">
+    <div class="stats" id="stats" role="status" aria-live="polite">
+      <div class="stat"><span class="stat-value" id="stat-sheets">0</span><span class="stat-label">sheets</span></div>
+      <div class="stat"><span class="stat-value" id="stat-per">0</span><span class="stat-label">per sheet</span></div>
+      <div class="stat"><span class="stat-value" id="stat-fill">0%</span><span class="stat-label">paper used</span></div>
+      <div class="stat"><span class="stat-value" id="stat-size">—</span><span class="stat-label">photo size</span></div>
+    </div>
+
+    <div id="notice" class="notice" hidden></div>
+
+    <div id="preview" class="preview">
+      <div class="empty-state">
+        <h3>Add photos to begin</h3>
+        <p>Choose a paper size and a photo size on the right. Sheets are filled to
+           waste as little paper as possible, and you can print straight from here.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ controls -->
+  <aside class="panel panel-controls">
+    <h2 class="panel-title">Layout</h2>
+
+    <div class="tabs" role="tablist" aria-label="Arrangement mode">
+      <button class="tab is-active" id="tab-grid" role="tab" aria-selected="true" type="button">Repeat one size</button>
+      <button class="tab" id="tab-pack" role="tab" aria-selected="false" type="button">Mixed sizes</button>
+    </div>
+
+    <!-- grid mode -->
+    <div id="mode-grid" class="mode-block">
+      <label class="field">
+        <span class="field-label">Which photos</span>
+        <select id="grid-source">
+          <option value="one">Selected photo only</option>
+          <option value="each">Every photo, own sheets</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span class="field-label">Print size</span>
+        <select id="grid-size"></select>
+      </label>
+
+      <div id="grid-custom" class="field-row" hidden>
+        <label class="field"><span class="field-label">Width (mm)</span>
+          <input id="grid-custom-w" type="number" min="5" max="1000" step="0.5" value="60"></label>
+        <label class="field"><span class="field-label">Height (mm)</span>
+          <input id="grid-custom-h" type="number" min="5" max="1000" step="0.5" value="80"></label>
+      </div>
+
+      <label class="field" id="grid-fill-field" hidden>
+        <span class="field-label">Photos per sheet <span class="hint">largest size that fits</span></span>
+        <input id="grid-fill-count" type="number" min="1" max="200" step="1" value="4">
+      </label>
+
+      <label class="field" id="grid-count-field">
+        <span class="field-label">How many copies</span>
+        <input id="grid-count" type="number" min="1" max="2000" step="1" value="8">
+      </label>
+      <div class="quick-row" id="grid-quick">
+        <button class="chip" data-count="1" type="button">1</button>
+        <button class="chip" data-count="2" type="button">2</button>
+        <button class="chip" data-count="4" type="button">4</button>
+        <button class="chip" data-count="6" type="button">6</button>
+        <button class="chip" data-count="8" type="button">8</button>
+        <button class="chip" data-count="fill" type="button">Fill sheet</button>
+      </div>
+    </div>
+
+    <!-- pack mode -->
+    <div id="mode-pack" class="mode-block" hidden>
+      <p class="muted small">Give each photo its own size and number of copies in the
+         Photos list. Sheets are then packed to use the least paper.</p>
+      <label class="field">
+        <span class="field-label">Apply one size to all</span>
+        <select id="pack-bulk-size"><option value="">Choose a size…</option></select>
+      </label>
+    </div>
+
+    <hr class="rule">
+
+    <label class="field">
+      <span class="field-label">Paper</span>
+      <select id="paper"></select>
+    </label>
+
+    <div id="paper-custom" class="field-row" hidden>
+      <label class="field"><span class="field-label">Width (mm)</span>
+        <input id="paper-w" type="number" min="20" max="2000" step="1" value="210"></label>
+      <label class="field"><span class="field-label">Height (mm)</span>
+        <input id="paper-h" type="number" min="20" max="2000" step="1" value="297"></label>
+    </div>
+
+    <div class="seg" role="group" aria-label="Orientation">
+      <button class="seg-btn is-active" data-orient="portrait" type="button">Portrait</button>
+      <button class="seg-btn" data-orient="landscape" type="button">Landscape</button>
+    </div>
+
+    <div class="field-row">
+      <label class="field"><span class="field-label">Page margin (mm)</span>
+        <input id="margin" type="number" min="0" max="50" step="0.5" value="5"></label>
+      <label class="field"><span class="field-label">Gap (mm)</span>
+        <input id="gap" type="number" min="0" max="30" step="0.5" value="2"></label>
+    </div>
+
+    <label class="field">
+      <span class="field-label">Print quality</span>
+      <select id="dpi"></select>
+    </label>
+
+    <div class="seg" role="group" aria-label="How photos fill their slot">
+      <button class="seg-btn is-active" data-fit="cover" type="button">Fill &amp; crop</button>
+      <button class="seg-btn" data-fit="contain" type="button">Fit whole photo</button>
+    </div>
+
+    <label class="check"><input id="cut-lines" type="checkbox" checked><span>Print cutting guides</span></label>
+    <label class="check"><input id="allow-rotate" type="checkbox" checked><span>Rotate photos to fit more</span></label>
+
+    <hr class="rule">
+    <div class="panel-actions">
+      <button id="btn-print-2" class="btn btn-primary btn-block" type="button">Print sheets</button>
+      <button id="btn-pdf-2" class="btn btn-soft btn-block" type="button">Save as PDF</button>
+    </div>
+  </aside>
+</main>
+
+<footer class="site-footer">
+  <strong>Stunity Tech</strong> · by Prateek
+</footer>
+
+<!-- ---------------------------------------------------------------- modals -->
+
+<div id="modal-editor" class="modal" hidden>
+  <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="editor-title">
+    <header class="modal-head">
+      <h3 id="editor-title">Enhance photo</h3>
+      <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
+    </header>
+    <div class="editor">
+      <div class="editor-stage">
+        <div class="editor-compare">
+          <figure><img id="editor-before" alt="Original"><figcaption>Original</figcaption></figure>
+          <figure><img id="editor-after" alt="Enhanced"><figcaption>Enhanced</figcaption></figure>
+        </div>
+        <div id="editor-dpi" class="dpi-report"></div>
+      </div>
+      <div class="editor-controls">
+        <button id="btn-auto" class="btn btn-soft btn-block" type="button">Auto-enhance</button>
+        <p class="muted small">Fixes dull colour and flat contrast by stretching the
+           histogram and neutralising colour casts.</p>
+
+        <label class="slider"><span>Exposure <b id="v-exposure">0</b></span>
+          <input id="s-exposure" type="range" min="-60" max="60" value="0"></label>
+        <label class="slider"><span>Contrast <b id="v-contrast">0</b></span>
+          <input id="s-contrast" type="range" min="-60" max="60" value="0"></label>
+        <label class="slider"><span>Saturation <b id="v-saturation">0</b></span>
+          <input id="s-saturation" type="range" min="-80" max="80" value="0"></label>
+        <label class="slider"><span>Warmth <b id="v-warmth">0</b></span>
+          <input id="s-warmth" type="range" min="-60" max="60" value="0"></label>
+        <label class="slider"><span>Print sharpening <b id="v-sharpen">35</b></span>
+          <input id="s-sharpen" type="range" min="0" max="120" value="35"></label>
+        <p class="muted small">Ink spreads on paper, so prints need more sharpening
+           than screens. 30–50 suits most photos.</p>
+
+        <hr class="rule">
+        <div class="rotate-row">
+          <span class="field-label">Rotate</span>
+          <button id="btn-rot-l" class="btn btn-soft" type="button">↺ 90°</button>
+          <button id="btn-rot-r" class="btn btn-soft" type="button">↻ 90°</button>
+        </div>
+        <div class="focus-block">
+          <span class="field-label">Keep this part when cropping</span>
+          <div class="focus-grid" role="group" aria-label="Crop anchor">
+            <button data-focus="0,0"     type="button" aria-label="Top left"></button>
+            <button data-focus="0.5,0"   type="button" aria-label="Top"></button>
+            <button data-focus="1,0"     type="button" aria-label="Top right"></button>
+            <button data-focus="0,0.5"   type="button" aria-label="Left"></button>
+            <button data-focus="0.5,0.5" class="is-active" type="button" aria-label="Centre"></button>
+            <button data-focus="1,0.5"   type="button" aria-label="Right"></button>
+            <button data-focus="0,1"     type="button" aria-label="Bottom left"></button>
+            <button data-focus="0.5,1"   type="button" aria-label="Bottom"></button>
+            <button data-focus="1,1"     type="button" aria-label="Bottom right"></button>
+          </div>
+          <p class="muted small">Only matters in “Fill &amp; crop” mode. For faces,
+             the top-centre anchor is usually the safe choice.</p>
+        </div>
+
+        <hr class="rule">
+        <div id="upscale-block">
+          <button id="btn-upscale" class="btn btn-soft btn-block" type="button">AI upscale for print</button>
+          <p id="upscale-note" class="muted small"></p>
+        </div>
+        <button id="btn-revert" class="link-btn" type="button" hidden>Revert to original</button>
+      </div>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-ghost" data-close type="button">Close</button>
+      <button id="btn-apply-all" class="btn btn-soft" type="button">Apply these settings to all photos</button>
+      <button id="btn-editor-done" class="btn btn-primary" type="button">Done</button>
+    </footer>
+  </div>
+</div>
+
+<div id="modal-search" class="modal" hidden>
+  <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="search-title">
+    <header class="modal-head">
+      <h3 id="search-title">Search photos online</h3>
+      <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
+    </header>
+    <div class="search-bar">
+      <select id="search-provider">
+        <option value="pexels">Pexels</option>
+        <option value="unsplash">Unsplash</option>
+      </select>
+      <input id="search-query" type="search" placeholder="mountains, birthday, texture…">
+      <select id="search-quality" aria-label="Download quality"></select>
+      <button id="btn-do-search" class="btn btn-primary" type="button">Search</button>
+    </div>
+    <div id="search-status" class="search-status"></div>
+    <div id="search-results" class="search-results"></div>
+  </div>
+</div>
+
+<div id="modal-settings" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+    <header class="modal-head">
+      <h3 id="settings-title">Settings</h3>
+      <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
+    </header>
+    <div class="modal-body">
+      <p class="muted small">Online search is optional — everything else works without it.
+         Keys are stored in this browser only and are sent solely to the provider they
+         belong to. Your photos never leave your device.</p>
+
+      <label class="field"><span class="field-label">Pexels API key</span>
+        <input id="key-pexels" type="password" autocomplete="off" placeholder="Paste key">
+      </label>
+      <p class="muted small">Free, instant: <a href="https://www.pexels.com/api/new/" target="_blank" rel="noopener">pexels.com/api</a> → copy your API key.</p>
+
+      <label class="field"><span class="field-label">Unsplash Access Key</span>
+        <input id="key-unsplash" type="password" autocomplete="off" placeholder="Paste key">
+      </label>
+      <p class="muted small">Free: <a href="https://unsplash.com/oauth/applications" target="_blank" rel="noopener">unsplash.com/developers</a> → New Application → copy the Access Key.</p>
+
+      <hr class="rule">
+      <label class="check"><input id="opt-persist" type="checkbox" checked>
+        <span>Keep my photos in this browser between visits</span></label>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      <button id="btn-save-keys" class="btn btn-primary" type="button">Save</button>
+    </footer>
+  </div>
+</div>
+
+<div id="modal-url" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="url-title">
+    <header class="modal-head">
+      <h3 id="url-title">Add photo by URL</h3>
+      <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
+    </header>
+    <div class="modal-body">
+      <label class="field"><span class="field-label">Image address</span>
+        <input id="url-input" type="url" placeholder="https://example.com/photo.jpg"></label>
+      <p class="muted small">Some sites block other websites from reading their images.
+         If a URL fails, save the picture to your device first and drop it in instead.</p>
+      <div id="url-status" class="search-status"></div>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      <button id="btn-add-url" class="btn btn-primary" type="button">Add photo</button>
+    </footer>
+  </div>
+</div>
+
+<div id="busy" class="busy" hidden>
+  <div class="busy-card"><div class="spinner"></div><p id="busy-text">Working…</p></div>
+</div>
+
+<script src="js/presets.js"></script>
+<script src="js/idb.js"></script>
+<script src="js/imaging.js"></script>
+<script src="js/layout.js"></script>
+<script src="js/search.js"></script>
+<script src="js/render.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
