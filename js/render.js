@@ -343,6 +343,97 @@
     setTimeout(cleanup, 60000);
   };
 
+  /* ------------------------------------------------------------ test sheet */
+
+  /* A page to hold a ruler against. Browsers quietly rescale printouts unless
+     margins are None and scale is 100%, which is the usual reason a 35 mm
+     passport photo comes out at 33 mm — and nothing on screen reveals it. */
+  App.printTestSheet = function (paper) {
+    const existing = document.getElementById('print-root');
+    if (existing) existing.remove();
+
+    const root = document.createElement('div');
+    root.id = 'print-root';
+
+    const sheet = document.createElement('div');
+    sheet.className = 'sheet';
+    sheet.style.width = paper.w + 'mm';
+    sheet.style.height = paper.h + 'mm';
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('viewBox', '0 0 ' + paper.w + ' ' + paper.h);
+    svg.setAttribute('preserveAspectRatio', 'none');
+    svg.style.position = 'absolute';
+    svg.style.inset = '0';
+    svg.style.width = '100%';
+    svg.style.height = '100%';
+
+    const add = (tag, attrs, text) => {
+      const el = document.createElementNS(SVG_NS, tag);
+      for (const k in attrs) el.setAttribute(k, attrs[k]);
+      if (text !== undefined) el.textContent = text;
+      svg.appendChild(el);
+      return el;
+    };
+    const label = (x, y, text, size) =>
+      add('text', { x, y, 'font-size': size || 3.2, fill: '#222', 'font-family': 'sans-serif' }, text);
+
+    const x0 = 20;
+    const rulerY = 58;
+
+    add('text', { x: x0, y: 28, 'font-size': 6, 'font-weight': '700', fill: '#000', 'font-family': 'sans-serif' },
+      'Printer test sheet');
+    label(x0, 37, 'Measure the bar and the box below with a ruler.');
+    label(x0, 43, 'If they are correct, your printer is not rescaling.');
+
+    // 100 mm ruler with 10 mm ticks.
+    add('line', { x1: x0, y1: rulerY, x2: x0 + 100, y2: rulerY, stroke: '#000', 'stroke-width': 0.35 });
+    for (let mm = 0; mm <= 100; mm += 10) {
+      const major = mm % 50 === 0;
+      add('line', {
+        x1: x0 + mm, y1: rulerY, x2: x0 + mm, y2: rulerY - (major ? 7 : 3.5),
+        stroke: '#000', 'stroke-width': 0.35
+      });
+      if (major) {
+        add('text', {
+          x: x0 + mm, y: rulerY - 8.5, 'font-size': 3.4, fill: '#000',
+          'text-anchor': 'middle', 'font-family': 'sans-serif'
+        }, String(mm));
+      }
+    }
+    label(x0, rulerY + 6, 'This bar must measure exactly 100 mm.');
+
+    // A real passport photo footprint.
+    const boxY = rulerY + 18;
+    add('rect', {
+      x: x0, y: boxY, width: 35, height: 45, fill: 'none',
+      stroke: '#000', 'stroke-width': 0.35, 'stroke-dasharray': '2 1.5'
+    });
+    label(x0 + 40, boxY + 10, 'This box must measure 35 × 45 mm —');
+    label(x0 + 40, boxY + 16, 'the size of a standard passport photo.');
+
+    label(x0, boxY + 60, 'If they come out smaller, open the print dialog and set:');
+    label(x0, boxY + 67, '   •  Margins:  None', 3.6);
+    label(x0, boxY + 74, '   •  Scale:  100%   (not "Fit to page")', 3.6);
+    label(x0, boxY + 84, 'Then print this sheet again to confirm.');
+
+    sheet.appendChild(svg);
+    root.appendChild(sheet);
+    document.body.appendChild(root);
+    pageStyle(paper);
+    document.documentElement.classList.add('printing');
+
+    const cleanup = () => {
+      document.documentElement.classList.remove('printing');
+      const node = document.getElementById('print-root');
+      if (node) node.remove();
+      window.removeEventListener('afterprint', cleanup);
+    };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+    setTimeout(cleanup, 60000);
+  };
+
   /* -------------------------------------------------------------------- PDF */
 
   function loadJsPdf() {

@@ -700,6 +700,7 @@
     const n = state.photos.length;
     $('library-count').textContent = n ? n + (n === 1 ? ' photo' : ' photos') : 'No photos yet';
     $('btn-clear').hidden = !n;
+    $('btn-enhance-all').hidden = !n;
 
     const rs = renderSettings();
 
@@ -734,10 +735,16 @@
       const dpi = App.effectiveDpi(photo.w, photo.h, target.w, target.h, rs.fit) / Math.max(1, photo.zoom || 1);
       const verdict = App.dpiVerdict(dpi);
 
-      const dpiBadge = document.createElement('span');
+      // A poor resolution badge is exactly the moment someone needs help, so
+      // make it the way in rather than a dead label.
+      const dpiBadge = document.createElement('button');
+      dpiBadge.type = 'button';
       dpiBadge.className = 'badge ' + verdict.level;
       dpiBadge.textContent = Math.round(dpi) + ' DPI · ' + verdict.label;
-      dpiBadge.title = 'Resolution at ' + App.fmtMm(target.w) + ' × ' + App.fmtMm(target.h);
+      dpiBadge.title =
+        'Resolution at ' + App.fmtMm(target.w) + ' × ' + App.fmtMm(target.h) +
+        ' — click to enhance or upscale this photo';
+      dpiBadge.addEventListener('click', () => openEditor(photo.id));
       meta.appendChild(dpiBadge);
 
       if (photo.enhanced) {
@@ -990,6 +997,7 @@
     }
 
     fillTextSelects();
+    fillJobRow();
     fillPresetSelect('');
   }
 
@@ -1587,6 +1595,76 @@
     }
   }
 
+  /* ------------------------------------------------------ quick start & help */
+
+  const PRINT_HELP_KEY = 'ppl.skipPrintHelp';
+
+  function fillJobRow() {
+    const host = $('job-row');
+    for (const job of App.JOB_PRESETS) {
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'job-chip';
+      chip.textContent = job.name;
+      chip.title = job.hint;
+      chip.dataset.job = job.id;
+      host.appendChild(chip);
+    }
+  }
+
+  /* One click should be enough for the job someone actually came here to do. */
+  function applyJobPreset(id) {
+    const job = App.JOB_PRESETS.find((j) => j.id === id);
+    if (!job) return;
+    const beforeSettings = Object.assign({}, state.settings);
+    const beforeGrid = Object.assign({}, state.grid);
+
+    Object.assign(state.settings, job.settings);
+    Object.assign(state.grid, job.grid || {});
+
+    pushUndo('the "' + job.name + '" quick start', () => {
+      Object.assign(state.settings, beforeSettings);
+      Object.assign(state.grid, beforeGrid);
+    });
+    App.clearSlotCache();
+    saveSettings();
+    refresh();
+    notice(job.hint + '.');
+  }
+
+  async function enhanceAll() {
+    if (!state.photos.length) return;
+    busy('Improving photos…');
+    try {
+      const before = state.photos.map((p) => Object.assign({}, p.adj));
+      for (const p of state.photos) {
+        p.adj.auto = true;
+        await refreshPreviewImage(p);
+        persistPhoto(p);
+      }
+      pushUndo('improving all photos', () => {
+        state.photos.forEach((p, i) => {
+          if (before[i]) p.adj = before[i];
+          refreshPreviewImage(p);
+          persistPhoto(p);
+        });
+      });
+      App.clearSlotCache();
+      refresh();
+      notice(
+        'Auto-enhanced all ' + state.photos.length + ' photos — undo if you preferred them as they were.'
+      );
+    } finally {
+      unbusy();
+    }
+  }
+
+  function doTestSheet() {
+    const open = openModalEl();
+    if (open) closeModal(open);
+    App.printTestSheet(currentPaper());
+  }
+
   /* ---------------------------------------------------------------- search */
 
   async function doSearch(reset) {
@@ -1779,9 +1857,25 @@
     return byId;
   }
 
-  async function doPrint() {
+  async function doPrint(skipHelp) {
     const layout = computeLayout();
     if (!layout.pages.length) return;
+
+    // Browsers rescale printouts unless told otherwise, and nothing on screen
+    // reveals it — so say it once, before the paper is spent.
+    if (skipHelp !== true) {
+      let seen = false;
+      try {
+        seen = !!localStorage.getItem(PRINT_HELP_KEY);
+      } catch (e) {
+        /* storage blocked; just show the reminder */
+      }
+      if (!seen) {
+        openModal('modal-print-help');
+        return;
+      }
+    }
+
     busy('Rendering sheets…');
     try {
       await App.printSheets(layout.pages, layout.paper, photosById(), renderSettings(), busy);
@@ -1885,6 +1979,27 @@
     });
 
     $('btn-undo').addEventListener('click', doUndo);
+
+    /* quick start & help */
+    $('job-row').addEventListener('click', (e) => {
+      const chip = e.target.closest('.job-chip');
+      if (chip) applyJobPreset(chip.dataset.job);
+    });
+    $('btn-enhance-all').addEventListener('click', enhanceAll);
+    $('btn-help').addEventListener('click', () => openModal('modal-help'));
+    $('btn-help-test-sheet').addEventListener('click', doTestSheet);
+    $('btn-test-sheet').addEventListener('click', doTestSheet);
+    $('btn-print-anyway').addEventListener('click', () => {
+      if ($('chk-skip-print-help').checked) {
+        try {
+          localStorage.setItem(PRINT_HELP_KEY, '1');
+        } catch (e) {
+          /* storage blocked; the reminder will simply show again */
+        }
+      }
+      closeModal($('modal-print-help'));
+      doPrint(true);
+    });
 
     /* mode + layout controls */
     $('tab-grid').addEventListener('click', () => setMode('grid'));
@@ -2205,9 +2320,9 @@
       closeModal($('modal-settings'));
     });
 
-    /* output */
-    $('btn-print').addEventListener('click', doPrint);
-    $('btn-print-2').addEventListener('click', doPrint);
+    /* output — wrapped so the click event is never mistaken for `skipHelp` */
+    $('btn-print').addEventListener('click', () => doPrint());
+    $('btn-print-2').addEventListener('click', () => doPrint());
     $('btn-pdf').addEventListener('click', doPdf);
     $('btn-pdf-2').addEventListener('click', doPdf);
 

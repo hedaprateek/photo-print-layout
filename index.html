@@ -19,6 +19,7 @@
   <p class="tagline">Pack photos onto paper with no wasted space</p>
   <div class="topbar-actions">
     <button id="btn-undo" class="btn btn-ghost" type="button" disabled>Undo</button>
+    <button id="btn-help" class="btn btn-ghost" type="button">Help</button>
     <button id="btn-settings" class="btn btn-ghost" type="button">Settings</button>
     <button id="btn-pdf" class="btn btn-ghost" type="button">Save PDF</button>
     <button id="btn-print" class="btn btn-primary" type="button">Print</button>
@@ -45,7 +46,10 @@
 
     <div class="library-head">
       <span id="library-count" class="muted">No photos yet</span>
-      <button id="btn-clear" class="link-btn" type="button" hidden>Remove all</button>
+      <span class="lib-head-actions">
+        <button id="btn-enhance-all" class="link-btn" type="button" hidden>Improve all</button>
+        <button id="btn-clear" class="link-btn" type="button" hidden>Remove all</button>
+      </span>
     </div>
 
     <ul id="library" class="library"></ul>
@@ -74,6 +78,11 @@
   <!-- ------------------------------------------------------------ controls -->
   <aside class="panel panel-controls">
     <h2 class="panel-title">Layout</h2>
+
+    <div class="field">
+      <span class="field-label">Quick start <span class="hint">sets everything below</span></span>
+      <div class="job-row" id="job-row"></div>
+    </div>
 
     <div class="tabs tabs-3" role="tablist" aria-label="Arrangement mode">
       <button class="tab is-active" id="tab-grid" role="tab" aria-selected="true" type="button">One size</button>
@@ -434,6 +443,63 @@
     <footer class="modal-foot">
       <button class="btn btn-ghost" data-close type="button">Cancel</button>
       <button id="btn-add-url" class="btn btn-primary" type="button">Add photo</button>
+    </footer>
+  </div>
+</div>
+
+<div id="modal-print-help" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="print-help-title">
+    <header class="modal-head">
+      <h3 id="print-help-title">Before you print</h3>
+      <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
+    </header>
+    <div class="modal-body">
+      <p class="muted small">Browsers shrink printouts unless told not to, and nothing on
+         screen shows it. Two settings in the print dialog decide whether your photos come
+         out at the right size:</p>
+      <div class="callout">
+        <strong>Margins:</strong> None<br>
+        <strong>Scale:</strong> 100% — not “Fit to page”
+      </div>
+      <p class="muted small">Not sure your printer is behaving? Print a test sheet and put
+         a ruler on it.</p>
+      <label class="check"><input id="chk-skip-print-help" type="checkbox">
+        <span>Don’t remind me again</span></label>
+    </div>
+    <footer class="modal-foot">
+      <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      <button id="btn-test-sheet" class="btn btn-soft" type="button">Print a test sheet</button>
+      <button id="btn-print-anyway" class="btn btn-primary" type="button">Print my sheets</button>
+    </footer>
+  </div>
+</div>
+
+<div id="modal-help" class="modal" hidden>
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="help-title">
+    <header class="modal-head">
+      <h3 id="help-title">How to get a good print</h3>
+      <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
+    </header>
+    <div class="modal-body">
+      <ol class="help-steps">
+        <li><strong>Add your photos.</strong> Drop them in or search online. Nothing is
+            uploaded — everything stays on this device.</li>
+        <li><strong>Pick a quick start.</strong> “8 passport”, “2 × 4R”, “Contact sheet” —
+            it sets the paper, size, margins and count for you.</li>
+        <li><strong>Look at the badge on each photo.</strong> It shows the resolution you
+            will really get at that size. Click it to improve a photo that is too small.</li>
+        <li><strong>Set the print dialog correctly.</strong> Margins <em>None</em>, scale
+            <em>100%</em> — otherwise everything prints slightly undersized.</li>
+        <li><strong>Cut along the corner marks.</strong> They sit in the gap between photos,
+            so no line is left on the print itself.</li>
+      </ol>
+      <div class="callout">Taking it to a print shop? Use <strong>Save PDF</strong> — the
+        page size is baked in, so it comes out the same anywhere.</div>
+      <p class="muted small"><kbd>Ctrl</kbd>+<kbd>P</kbd> print · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo</p>
+    </div>
+    <footer class="modal-foot">
+      <button id="btn-help-test-sheet" class="btn btn-soft" type="button">Print a test sheet</button>
+      <button class="btn btn-primary" data-close type="button">Got it</button>
     </footer>
   </div>
 </div>

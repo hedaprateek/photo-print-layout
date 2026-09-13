@@ -66,6 +66,61 @@
     { id: 600, name: '600 DPI — maximum' }
   ];
 
+  /* One-click recipes for the jobs people actually come here to do. Setting
+     paper, size, margins and counts by hand is the main thing standing between
+     "I need passport photos" and a sheet ready to print. */
+  App.JOB_PRESETS = [
+    {
+      id: 'pp8',
+      name: '8 passport',
+      hint: 'Eight 35×45 mm passport photos on A4',
+      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'cover' },
+      grid: { source: 'one', sizeId: 'id_35x45', fill: false, count: 8 }
+    },
+    {
+      id: 'ppfull',
+      name: 'Passport, full sheet',
+      hint: 'As many 35×45 mm passport photos as an A4 sheet holds',
+      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'cover' },
+      grid: { source: 'one', sizeId: 'id_35x45', fill: false, count: 30 }
+    },
+    {
+      id: 'stamp16',
+      name: '16 stamp',
+      hint: 'Sixteen 20×25 mm stamp photos on A4',
+      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'cover' },
+      grid: { source: 'one', sizeId: 'id_stamp', fill: false, count: 16 }
+    },
+    {
+      id: 'r4x2',
+      name: '2 × 4R',
+      hint: 'Two 4×6 inch prints on one A4 sheet',
+      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 3, fit: 'cover' },
+      grid: { source: 'one', sizeId: 'p_4r', fill: false, count: 2 }
+    },
+    {
+      id: 'fullpage',
+      name: 'Full page',
+      hint: 'One photo as large as the sheet allows',
+      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 0, fit: 'cover' },
+      grid: { source: 'one', fill: true, fillCount: 1 }
+    },
+    {
+      id: 'everyone',
+      name: 'One sheet each',
+      hint: 'Every photo gets its own sheet of 8 passport photos',
+      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'cover' },
+      grid: { source: 'each', sizeId: 'id_35x45', fill: false, count: 8 }
+    },
+    {
+      id: 'contact',
+      name: 'Contact sheet',
+      hint: 'Every photo as a labelled thumbnail, to choose from',
+      settings: { mode: 'contact', paperId: 'a4', orientation: 'portrait', margin: 8, gap: 3, contactCols: 4 },
+      grid: {}
+    }
+  ];
+
   App.findPaper = (id) => App.PAPERS.find((p) => p.id === id) || App.PAPERS[1];
   App.findSize = (id) => App.SIZES.find((s) => s.id === id) || App.SIZES[0];
   App.findPrinter = (id) => App.PRINTERS.find((p) => p.id === id) || App.PRINTERS[0];

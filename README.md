@@ -33,6 +33,11 @@ sheet* and it works out the largest size that fits the number you want per page.
 - **Contact sheet** — every photo as a labelled thumbnail, for choosing which
   ones to print properly.
 
+**Or skip all of that.** *Quick start* has one-click recipes for the jobs people
+actually come here to do — 8 passport, a full sheet of passport photos, 16 stamp,
+2 × 4R, a full-page print, one sheet each, or a contact sheet. Each sets the
+paper, size, margins and count in one go, and can be undone.
+
 **Then print or save a PDF** at 150, 300 or 600 DPI.
 
 Save any combination as a named setup ("8 passport on A4") and pull it back in
@@ -49,6 +54,18 @@ before you waste paper rather than after.
 reaches the paper edge. Tell it what you have — typical inkjet, wide-bottom
 inkjet, laser, borderless — and it flags any photo straying into the band that
 physically cannot be printed, and says what margin to use instead.
+
+**It tells you about the print dialog.** Browsers shrink printouts unless
+margins are set to *None* and scale to *100%*, and nothing on screen reveals it
+— which is the usual reason a 35 mm passport photo comes out at 33 mm. The app
+says so once, before the paper is spent, and remembers when you tell it not to
+mention it again. If you are not sure your printer is behaving, **print a test
+sheet**: a 100 mm ruler and a real 35 × 45 mm box to hold a ruler against.
+
+**Low resolution is a way in, not a dead end.** The badge on each photo is a
+button — click `96 DPI · Too low` and it opens that photo's enhance panel, where
+you can upscale it. *Improve all* auto-enhances the whole batch in one go, and
+undo puts it back.
 
 **It sharpens for paper.** Ink spreads slightly when it hits paper, so a file
 that looks crisp on screen prints soft. Unsharp masking is applied after the
