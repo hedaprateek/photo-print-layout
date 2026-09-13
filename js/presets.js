@@ -1,4 +1,4 @@
-/* Paper + photo size presets. All internal units are millimetres. */
+/* Paper, print-size, printer and quality tables. All internal units are mm. */
 (function (App) {
   'use strict';
 
@@ -21,14 +21,22 @@
     { id: 'custom', name: 'Custom…', w: 210, h: 297, group: 'Custom' }
   ];
 
-  /* Photo / print sizes. `id` is stable; do not rename once shipped. */
+  /* Where the head and eyes must sit for an identity photo to be accepted,
+     as fractions of the photo height measured from the top edge. Derived from
+     the published head-height and eye-height ranges for each format; the
+     midpoint of each range is used, which is what the overlay draws. */
+  const PASSPORT_GUIDE = { headTop: 0.07, headBottom: 0.82, eyeLine: 0.53 };
+  const US_GUIDE = { headTop: 0.12, headBottom: 0.78, eyeLine: 0.38 };
+  const SQUARE_GUIDE = { headTop: 0.1, headBottom: 0.85, eyeLine: 0.45 };
+
+  /* `id` is stable; do not rename once shipped. */
   App.SIZES = [
-    { id: 'id_35x45', name: 'Passport 35×45 mm', w: 35, h: 45, group: 'Identity' },
-    { id: 'id_2x2', name: 'Passport 2×2 in (US)', w: 2 * IN, h: 2 * IN, group: 'Identity' },
-    { id: 'id_35x35', name: 'Visa 35×35 mm', w: 35, h: 35, group: 'Identity' },
-    { id: 'id_25x35', name: 'Small ID 25×35 mm', w: 25, h: 35, group: 'Identity' },
-    { id: 'id_stamp', name: 'Stamp 20×25 mm', w: 20, h: 25, group: 'Identity' },
-    { id: 'id_50x70', name: 'ID 50×70 mm', w: 50, h: 70, group: 'Identity' },
+    { id: 'id_35x45', name: 'Passport 35×45 mm', w: 35, h: 45, group: 'Identity', guide: PASSPORT_GUIDE },
+    { id: 'id_2x2', name: 'Passport 2×2 in (US)', w: 2 * IN, h: 2 * IN, group: 'Identity', guide: US_GUIDE },
+    { id: 'id_35x35', name: 'Visa 35×35 mm', w: 35, h: 35, group: 'Identity', guide: SQUARE_GUIDE },
+    { id: 'id_25x35', name: 'Small ID 25×35 mm', w: 25, h: 35, group: 'Identity', guide: PASSPORT_GUIDE },
+    { id: 'id_stamp', name: 'Stamp 20×25 mm', w: 20, h: 25, group: 'Identity', guide: PASSPORT_GUIDE },
+    { id: 'id_50x70', name: 'ID 50×70 mm', w: 50, h: 70, group: 'Identity', guide: PASSPORT_GUIDE },
     { id: 'p_3r', name: '3R · 3.5×5 in', w: 3.5 * IN, h: 5 * IN, group: 'Prints' },
     { id: 'p_4r', name: '4R · 4×6 in', w: 4 * IN, h: 6 * IN, group: 'Prints' },
     { id: 'p_5r', name: '5R · 5×7 in', w: 5 * IN, h: 7 * IN, group: 'Prints' },
@@ -41,6 +49,17 @@
     { id: 'custom', name: 'Custom…', w: 60, h: 80, group: 'Custom' }
   ];
 
+  /* Unprintable edges. Almost no consumer printer reaches the paper edge, so
+     a page margin smaller than this silently clips the outer row of photos. */
+  App.PRINTERS = [
+    { id: 'inkjet', name: 'Inkjet — typical (3.5 mm)', edge: 3.5 },
+    { id: 'inkjet_foot', name: 'Inkjet — wide bottom (3 / 14 mm)', edge: 3, bottom: 14 },
+    { id: 'laser', name: 'Laser — typical (4.2 mm)', edge: 4.2 },
+    { id: 'safe', name: 'Conservative (5 mm)', edge: 5 },
+    { id: 'borderless', name: 'Borderless / edge-to-edge', edge: 0 },
+    { id: 'custom', name: 'Custom…', edge: 3.5 }
+  ];
+
   App.QUALITY = [
     { id: 150, name: '150 DPI — draft / fast' },
     { id: 300, name: '300 DPI — photo quality' },
@@ -49,6 +68,14 @@
 
   App.findPaper = (id) => App.PAPERS.find((p) => p.id === id) || App.PAPERS[1];
   App.findSize = (id) => App.SIZES.find((s) => s.id === id) || App.SIZES[0];
+  App.findPrinter = (id) => App.PRINTERS.find((p) => p.id === id) || App.PRINTERS[0];
+
+  /* Unprintable band on each side, in mm. */
+  App.printerEdges = function (printerId, customEdge) {
+    const p = App.findPrinter(printerId);
+    const edge = printerId === 'custom' ? (customEdge || 0) : p.edge;
+    return { top: edge, right: edge, left: edge, bottom: p.bottom !== undefined ? p.bottom : edge };
+  };
 
   /* mm -> device pixels at a given DPI */
   App.mmToPx = (mm, dpi) => Math.max(1, Math.round((mm / IN) * dpi));

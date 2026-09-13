@@ -18,6 +18,7 @@
   </div>
   <p class="tagline">Pack photos onto paper with no wasted space</p>
   <div class="topbar-actions">
+    <button id="btn-undo" class="btn btn-ghost" type="button" disabled>Undo</button>
     <button id="btn-settings" class="btn btn-ghost" type="button">Settings</button>
     <button id="btn-pdf" class="btn btn-ghost" type="button">Save PDF</button>
     <button id="btn-print" class="btn btn-primary" type="button">Print</button>
@@ -74,9 +75,10 @@
   <aside class="panel panel-controls">
     <h2 class="panel-title">Layout</h2>
 
-    <div class="tabs" role="tablist" aria-label="Arrangement mode">
-      <button class="tab is-active" id="tab-grid" role="tab" aria-selected="true" type="button">Repeat one size</button>
+    <div class="tabs tabs-3" role="tablist" aria-label="Arrangement mode">
+      <button class="tab is-active" id="tab-grid" role="tab" aria-selected="true" type="button">One size</button>
       <button class="tab" id="tab-pack" role="tab" aria-selected="false" type="button">Mixed sizes</button>
+      <button class="tab" id="tab-contact" role="tab" aria-selected="false" type="button">Contact sheet</button>
     </div>
 
     <!-- grid mode -->
@@ -122,15 +124,35 @@
 
     <!-- pack mode -->
     <div id="mode-pack" class="mode-block" hidden>
-      <p class="muted small">Give each photo its own size and number of copies in the
-         Photos list. Sheets are then packed to use the least paper.</p>
+      <p class="muted small">Each photo can carry several sizes at once — add rows in
+         the Photos list. Sheets are packed to use the least paper.</p>
       <label class="field">
         <span class="field-label">Apply one size to all</span>
         <select id="pack-bulk-size"><option value="">Choose a size…</option></select>
       </label>
     </div>
 
+    <!-- contact sheet mode -->
+    <div id="mode-contact" class="mode-block" hidden>
+      <p class="muted small">Every photo as a labelled thumbnail, for choosing which
+         ones to print properly.</p>
+      <label class="field">
+        <span class="field-label">Columns</span>
+        <input id="contact-cols" type="number" min="1" max="12" step="1" value="4">
+      </label>
+      <label class="check"><input id="contact-labels" type="checkbox" checked><span>Print filenames</span></label>
+    </div>
+
     <hr class="rule">
+
+    <div class="field">
+      <span class="field-label">Saved setups</span>
+      <div class="preset-row">
+        <select id="preset-select"><option value="">Current settings</option></select>
+        <button id="btn-preset-save" class="btn btn-soft" type="button" title="Save these settings">Save</button>
+        <button id="btn-preset-delete" class="btn btn-soft" type="button" title="Delete this setup" disabled>×</button>
+      </div>
+    </div>
 
     <label class="field">
       <span class="field-label">Paper</span>
@@ -157,6 +179,15 @@
     </div>
 
     <label class="field">
+      <span class="field-label">My printer <span class="hint">warns about clipping</span></span>
+      <select id="printer"></select>
+    </label>
+    <label class="field" id="printer-custom" hidden>
+      <span class="field-label">Unprintable edge (mm)</span>
+      <input id="printer-edge" type="number" min="0" max="25" step="0.5" value="3.5">
+    </label>
+
+    <label class="field">
       <span class="field-label">Print quality</span>
       <select id="dpi"></select>
     </label>
@@ -166,7 +197,17 @@
       <button class="seg-btn" data-fit="contain" type="button">Fit whole photo</button>
     </div>
 
-    <label class="check"><input id="cut-lines" type="checkbox" checked><span>Print cutting guides</span></label>
+    <div class="field-row">
+      <label class="field"><span class="field-label">White border (mm)</span>
+        <input id="border-mm" type="number" min="0" max="25" step="0.5" value="0"></label>
+      <label class="field"><span class="field-label">Cutting guides</span>
+        <select id="cut-marks">
+          <option value="ticks">Corner marks</option>
+          <option value="lines">Full outlines</option>
+          <option value="none">None</option>
+        </select></label>
+    </div>
+
     <label class="check"><input id="allow-rotate" type="checkbox" checked><span>Rotate photos to fit more</span></label>
 
     <hr class="rule">
@@ -181,6 +222,14 @@
   <strong>Stunity Tech</strong> · by Prateek
 </footer>
 
+<!-- Printed only when the browser's own print command is used without going
+     through the app, which would otherwise produce a blank page. -->
+<div id="print-fallback">
+  <h1>Print Sheet</h1>
+  <p>Use the <strong>Print</strong> button inside the app to print your sheets —
+     that is what renders them at the right size for your paper.</p>
+</div>
+
 <!-- ---------------------------------------------------------------- modals -->
 
 <div id="modal-editor" class="modal" hidden>
@@ -192,11 +241,24 @@
     <div class="editor">
       <div class="editor-stage">
         <div class="editor-compare">
-          <figure><img id="editor-before" alt="Original"><figcaption>Original</figcaption></figure>
-          <figure><img id="editor-after" alt="Enhanced"><figcaption>Enhanced</figcaption></figure>
+          <figure>
+            <img id="editor-before" alt="The original photo">
+            <figcaption>Original</figcaption>
+          </figure>
+          <figure>
+            <div class="crop-stage" id="crop-stage">
+              <img id="editor-after" alt="How the photo will print" draggable="false">
+              <svg id="crop-guide" class="crop-guide" viewBox="0 0 100 100"
+                   preserveAspectRatio="none" aria-hidden="true" hidden></svg>
+              <span class="crop-hint" id="crop-hint">Drag to reposition</span>
+            </div>
+            <figcaption>How it will print</figcaption>
+          </figure>
         </div>
         <div id="editor-dpi" class="dpi-report"></div>
+        <div id="editor-profile" class="dpi-report warn-report" hidden></div>
       </div>
+
       <div class="editor-controls">
         <button id="btn-auto" class="btn btn-soft btn-block" type="button">Auto-enhance</button>
         <p class="muted small">Fixes dull colour and flat contrast by stretching the
@@ -216,11 +278,15 @@
            than screens. 30–50 suits most photos.</p>
 
         <hr class="rule">
+        <label class="slider"><span>Zoom <b id="v-zoom">1.0×</b></span>
+          <input id="s-zoom" type="range" min="100" max="400" value="100"></label>
         <div class="rotate-row">
           <span class="field-label">Rotate</span>
-          <button id="btn-rot-l" class="btn btn-soft" type="button">↺ 90°</button>
-          <button id="btn-rot-r" class="btn btn-soft" type="button">↻ 90°</button>
+          <button id="btn-rot-l" class="btn btn-soft" type="button" aria-label="Rotate left">↺ 90°</button>
+          <button id="btn-rot-r" class="btn btn-soft" type="button" aria-label="Rotate right">↻ 90°</button>
         </div>
+        <button id="btn-reset-frame" class="link-btn" type="button">Reset framing</button>
+
         <div class="focus-block">
           <span class="field-label">Keep this part when cropping</span>
           <div class="focus-grid" role="group" aria-label="Crop anchor">
@@ -234,21 +300,19 @@
             <button data-focus="0.5,1"   type="button" aria-label="Bottom"></button>
             <button data-focus="1,1"     type="button" aria-label="Bottom right"></button>
           </div>
-          <p class="muted small">Only matters in “Fill &amp; crop” mode. For faces,
-             the top-centre anchor is usually the safe choice.</p>
+          <p class="muted small">Or just drag the photo on the right. For identity
+             sizes the overlay shows where the head and eyes must sit.</p>
         </div>
 
         <hr class="rule">
-        <div id="upscale-block">
-          <button id="btn-upscale" class="btn btn-soft btn-block" type="button">AI upscale for print</button>
-          <p id="upscale-note" class="muted small"></p>
-        </div>
+        <button id="btn-upscale" class="btn btn-soft btn-block" type="button">AI upscale for print</button>
+        <p id="upscale-note" class="muted small"></p>
         <button id="btn-revert" class="link-btn" type="button" hidden>Revert to original</button>
       </div>
     </div>
     <footer class="modal-foot">
       <button class="btn btn-ghost" data-close type="button">Close</button>
-      <button id="btn-apply-all" class="btn btn-soft" type="button">Apply these settings to all photos</button>
+      <button id="btn-apply-all" class="btn btn-soft" type="button">Apply settings to all photos</button>
       <button id="btn-editor-done" class="btn btn-primary" type="button">Done</button>
     </footer>
   </div>
@@ -261,7 +325,8 @@
       <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
     </header>
     <div class="search-bar">
-      <select id="search-provider">
+      <select id="search-provider" aria-label="Source">
+        <option value="wikimedia">Wikimedia Commons</option>
         <option value="pexels">Pexels</option>
         <option value="unsplash">Unsplash</option>
       </select>
@@ -281,9 +346,10 @@
       <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
     </header>
     <div class="modal-body">
-      <p class="muted small">Online search is optional — everything else works without it.
-         Keys are stored in this browser only and are sent solely to the provider they
-         belong to. Your photos never leave your device.</p>
+      <p class="muted small"><strong>Wikimedia Commons search needs no key</strong> and
+         works already. The keys below are only for Pexels and Unsplash. They are
+         stored in this browser and sent solely to the provider they belong to.
+         Your photos never leave your device.</p>
 
       <label class="field"><span class="field-label">Pexels API key</span>
         <input id="key-pexels" type="password" autocomplete="off" placeholder="Paste key">
@@ -327,11 +393,15 @@
 </div>
 
 <div id="busy" class="busy" hidden>
-  <div class="busy-card"><div class="spinner"></div><p id="busy-text">Working…</p></div>
+  <div class="busy-card">
+    <div class="spinner"></div>
+    <p id="busy-text" role="status" aria-live="polite">Working…</p>
+  </div>
 </div>
 
 <script src="js/presets.js"></script>
 <script src="js/idb.js"></script>
+<script src="js/profile.js"></script>
 <script src="js/imaging.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/search.js"></script>

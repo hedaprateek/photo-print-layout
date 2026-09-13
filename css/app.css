@@ -61,9 +61,7 @@ a { color: var(--accent); }
 }
 
 .brand-name { font-weight: 650; letter-spacing: -.01em; font-size: 15px; }
-
 .tagline { margin: 0; color: var(--text-faint); font-size: 13px; flex: 1; }
-
 .topbar-actions { display: flex; gap: 8px; }
 
 /* ------------------------------------------------------------------ shell */
@@ -128,6 +126,7 @@ a { color: var(--accent); }
   background: none; border: 0; padding: 0;
   color: var(--accent); font: inherit; font-size: 12px; cursor: pointer;
   text-decoration: underline; text-underline-offset: 2px;
+  align-self: flex-start;
 }
 
 .icon-btn {
@@ -164,7 +163,8 @@ input[type="password"], select {
 }
 
 input:focus-visible, select:focus-visible, .btn:focus-visible, .dropzone:focus-visible,
-.tab:focus-visible, .seg-btn:focus-visible {
+.tab:focus-visible, .seg-btn:focus-visible, .link-btn:focus-visible,
+.focus-grid button:focus-visible, .result:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
@@ -175,20 +175,21 @@ select { cursor: pointer; }
 .check input { accent-color: var(--accent); width: 15px; height: 15px; }
 
 .slider { display: flex; flex-direction: column; gap: 4px; margin-bottom: 8px; }
-.slider > span {
-  display: flex; justify-content: space-between;
-  font-size: 12px; color: var(--text-dim);
-}
+.slider > span { display: flex; justify-content: space-between; font-size: 12px; color: var(--text-dim); }
 .slider b { color: var(--text); font-variant-numeric: tabular-nums; }
 .slider input { width: 100%; accent-color: var(--accent); }
+
+.preset-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 6px; }
+.preset-row .btn { padding: 7px 10px; }
 
 /* ------------------------------------------------------------- tabs / segs */
 
 .tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; background: var(--bg-3); padding: 3px; border-radius: var(--radius-sm); }
+.tabs-3 { grid-template-columns: repeat(3, 1fr); }
 
 .tab, .seg-btn {
-  font: inherit; font-size: 12.5px; font-weight: 550;
-  padding: 7px 6px; border: 0; border-radius: 5px;
+  font: inherit; font-size: 12px; font-weight: 550;
+  padding: 7px 4px; border: 0; border-radius: 5px;
   background: transparent; color: var(--text-dim); cursor: pointer;
 }
 .tab.is-active, .seg-btn.is-active { background: var(--accent-dim); color: #fff; }
@@ -224,7 +225,6 @@ select { cursor: pointer; }
 .dropzone span { font-size: 12px; color: var(--text-faint); }
 
 .add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-
 .library-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; }
 
 /* ----------------------------------------------------------------- library */
@@ -241,20 +241,18 @@ select { cursor: pointer; }
   border-radius: var(--radius-sm);
 }
 .lib-item.is-selected { border-color: var(--accent); background: #1e2338; }
+.lib-item.is-dragging { opacity: .4; }
+.lib-item.drop-target { border-color: var(--accent); box-shadow: 0 -2px 0 var(--accent); }
 
 .lib-thumb {
   width: 54px; height: 54px;
   border-radius: 5px; object-fit: cover;
-  background: #0b0d14; cursor: pointer;
+  background: #0b0d14; cursor: grab;
 }
 
 .lib-body { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 
-.lib-name {
-  font-size: 12px; font-weight: 550;
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-
+.lib-name { font-size: 12px; font-weight: 550; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .lib-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 11px; color: var(--text-faint); }
 
 .badge {
@@ -268,10 +266,14 @@ select { cursor: pointer; }
 .badge.bad  { background: rgba(239,98,98,.18); color: var(--bad); }
 .badge.ai   { background: rgba(108,140,255,.18); color: var(--accent); }
 
-.lib-controls { display: grid; grid-template-columns: 1fr 52px; gap: 5px; }
-.lib-controls select, .lib-controls input { padding: 4px 6px; font-size: 11.5px; }
+.size-rows { display: flex; flex-direction: column; gap: 4px; }
+.size-row { display: grid; grid-template-columns: minmax(0, 1fr) 46px 20px; gap: 4px; align-items: center; }
+.size-row select, .size-row input { padding: 4px 6px; font-size: 11.5px; }
+.size-row .icon-btn { font-size: 16px; padding: 0; }
+.size-custom { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+.size-custom input { padding: 4px 6px; font-size: 11.5px; }
 
-.lib-actions { display: flex; gap: 10px; }
+.lib-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .lib-actions button { font-size: 11.5px; }
 
 /* --------------------------------------------------------------- workspace */
@@ -324,32 +326,29 @@ select { cursor: pointer; }
 .empty-state p { margin: 0; font-size: 13px; }
 
 .sheet-block { display: flex; flex-direction: column; align-items: center; gap: 7px; }
-
 .sheet-label { font-size: 11px; color: var(--text-faint); letter-spacing: .04em; }
-
 .sheet-wrap { position: relative; }
 
 /* Sheets are laid out in real millimetres; the preview only scales them. */
-.sheet {
-  position: relative;
-  background: #fff;
-  overflow: hidden;
-  transform-origin: top left;
-}
-
+.sheet { position: relative; background: #fff; overflow: hidden; transform-origin: top left; }
 .sheet-wrap .sheet { box-shadow: 0 6px 28px rgba(0,0,0,.45); }
 
-.slot { position: absolute; overflow: hidden; }
+.slot { position: absolute; }
+.photo-box { position: absolute; left: 0; top: 0; background: #fff; overflow: hidden; }
+.slot-clip { position: absolute; overflow: hidden; }
+.slot-frame { position: absolute; left: 50%; top: 50%; overflow: hidden; }
 
-.slot-frame { position: absolute; left: 50%; top: 50%; }
+/* Positioned explicitly by the renderer so the preview matches the print. */
+.slot-frame img { position: absolute; display: block; max-width: none; }
 
-.slot-frame img { width: 100%; height: 100%; display: block; }
-
-.cut-guide {
-  position: absolute; inset: 0;
-  border: 0.2mm dashed #bfbfbf;
-  pointer-events: none;
+.slot-caption {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  color: #333; overflow: hidden; white-space: nowrap;
+  padding: 0 1mm; font-family: system-ui, sans-serif;
 }
+
+.cut-marks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
 /* ------------------------------------------------------------------ modals */
 
@@ -370,7 +369,7 @@ select { cursor: pointer; }
   display: flex; flex-direction: column;
   box-shadow: 0 24px 70px rgba(0,0,0,.55);
 }
-.modal-wide { max-width: 900px; }
+.modal-wide { max-width: 940px; }
 
 .modal-head {
   display: flex; align-items: center; justify-content: space-between;
@@ -387,25 +386,49 @@ select { cursor: pointer; }
 
 /* ------------------------------------------------------------------ editor */
 
-.editor { display: grid; grid-template-columns: minmax(0, 1fr) 265px; gap: 0; overflow: hidden; min-height: 0; }
-
+.editor { display: grid; grid-template-columns: minmax(0, 1fr) 272px; overflow: hidden; min-height: 0; }
 .editor-stage { padding: 16px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px; }
 
-.editor-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.editor-compare figure { margin: 0; display: flex; flex-direction: column; gap: 6px; }
-/* A shared height keeps the two captions on the same line whatever shape the
-   photo and the target slot happen to be. */
-.editor-compare img {
-  width: 100%; height: 40vh; min-height: 180px; object-fit: contain;
+.editor-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: start; }
+.editor-compare figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.editor-compare figcaption { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); }
+
+#editor-before {
+  width: 100%; height: 38vh; min-height: 170px; object-fit: contain;
   background: #0b0d14; border-radius: var(--radius-sm); display: block;
 }
-.editor-compare figcaption { font-size: 11px; text-transform: uppercase; letter-spacing: .07em; color: var(--text-faint); text-align: center; }
+
+/* Shrink-wraps the image so the guide overlay lines up with the photo itself. */
+.crop-stage {
+  position: relative; display: inline-block; max-width: 100%;
+  background: #0b0d14; border-radius: var(--radius-sm);
+  overflow: hidden; line-height: 0;
+  cursor: grab; touch-action: none; user-select: none;
+}
+.crop-stage.is-dragging { cursor: grabbing; }
+
+#editor-after {
+  display: block; max-width: 100%; max-height: 38vh;
+  width: auto; height: auto; user-select: none; -webkit-user-drag: none;
+}
+
+.crop-guide { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.crop-guide ellipse { fill: none; stroke: rgba(255,255,255,.85); stroke-width: 0.8; stroke-dasharray: 2 2; }
+.crop-guide line { stroke: rgba(108,220,255,.9); stroke-width: 0.7; stroke-dasharray: 3 2; }
+
+.crop-hint {
+  position: absolute; left: 50%; bottom: 7px; transform: translateX(-50%);
+  font-size: 10.5px; line-height: 1.4; color: #dfe3f0;
+  background: rgba(8,10,18,.72); padding: 2px 8px; border-radius: 999px;
+  pointer-events: none; white-space: nowrap;
+}
 
 .dpi-report {
   padding: 10px 12px; border-radius: var(--radius-sm);
   background: var(--bg-3); border: 1px solid var(--line); font-size: 12.5px;
 }
 .dpi-report b { font-variant-numeric: tabular-nums; }
+.warn-report { background: rgba(240,184,73,.12); border-color: rgba(240,184,73,.3); color: #f6d79a; }
 
 .editor-controls {
   padding: 16px; border-left: 1px solid var(--line);
@@ -415,30 +438,20 @@ select { cursor: pointer; }
 .rotate-row { display: flex; align-items: center; gap: 8px; }
 .rotate-row .field-label { flex: 1; }
 
-.focus-block { display: flex; flex-direction: column; gap: 7px; }
+.focus-block { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
 
 .focus-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 3px;
-  width: 96px;
-  aspect-ratio: 1;
-  padding: 3px;
-  background: var(--bg-3);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 3px;
+  width: 96px; aspect-ratio: 1; padding: 3px;
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius-sm);
 }
-.focus-grid button {
-  border: 0; border-radius: 3px;
-  background: #2a3042; cursor: pointer; padding: 0;
-}
+.focus-grid button { border: 0; border-radius: 3px; background: #2a3042; cursor: pointer; padding: 0; }
 .focus-grid button:hover { background: #353d55; }
 .focus-grid button.is-active { background: var(--accent); }
 
 /* ------------------------------------------------------------------ search */
 
-.search-bar { display: grid; grid-template-columns: 120px minmax(0, 1fr) 170px auto; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
-
+.search-bar { display: grid; grid-template-columns: 160px minmax(0, 1fr) 170px auto; gap: 8px; padding: 14px 16px; border-bottom: 1px solid var(--line); }
 .search-status { padding: 10px 16px; font-size: 12.5px; color: var(--text-dim); }
 .search-status.error { color: #f8b4b4; }
 
@@ -447,13 +460,13 @@ select { cursor: pointer; }
   gap: 10px; padding: 0 16px 16px; overflow-y: auto;
 }
 
-.result { position: relative; border: 0; padding: 0; background: none; cursor: pointer; border-radius: var(--radius-sm); overflow: hidden; }
+.result { position: relative; border: 0; padding: 0; margin: 0; background: none; cursor: pointer; border-radius: var(--radius-sm); overflow: hidden; }
 .result img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--bg-3); }
 .result:hover img { opacity: .8; }
 .result figcaption {
   position: absolute; inset: auto 0 0 0;
-  padding: 12px 7px 5px;
-  background: linear-gradient(transparent, rgba(0,0,0,.82));
+  padding: 14px 7px 5px;
+  background: linear-gradient(transparent, rgba(0,0,0,.85));
   font-size: 10.5px; color: #e6e8f0; text-align: left;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
@@ -496,9 +509,6 @@ select { cursor: pointer; }
 
 /* ------------------------------------------------------------- responsive */
 
-/* Controls move above the preview on narrower screens. The row holding them
-   must not scroll: an `auto` grid row sizes a scroll container to nothing,
-   which collapses the panel to just its heading. */
 @media (max-width: 1080px) {
   .shell {
     grid-template-columns: 250px minmax(0, 1fr);
@@ -524,7 +534,6 @@ select { cursor: pointer; }
   .editor-controls { border-left: 0; border-top: 1px solid var(--line); }
 }
 
-/* One phone-width column that scrolls as a normal page. */
 @media (max-width: 760px) {
   html, body { height: auto; }
 
@@ -543,6 +552,8 @@ select { cursor: pointer; }
   .search-bar { grid-template-columns: 1fr 1fr; }
   .modal { padding: 0; }
   .modal-card { max-height: 100vh; border-radius: 0; }
+  #editor-before, #editor-after { max-height: 30vh; }
+  #editor-before { height: 30vh; }
 }
 
 /* ------------------------------------------------------------------- print */
@@ -550,8 +561,11 @@ select { cursor: pointer; }
 /* Kept in the document but off-screen so the browser still decodes the images. */
 #print-root { position: absolute; left: -20000px; top: 0; }
 
+/* Shown only when printing was started outside the app. */
+#print-fallback { display: none; }
+
 @media print {
-  body > *:not(#print-root) { display: none !important; }
+  body > *:not(#print-root):not(#print-fallback) { display: none !important; }
 
   html, body { background: #fff; height: auto; display: block; }
 
@@ -564,4 +578,15 @@ select { cursor: pointer; }
     overflow: hidden;
   }
   #print-root .sheet:last-child { break-after: auto; page-break-after: auto; }
+
+  #print-fallback {
+    display: block;
+    color: #000;
+    font: 14px/1.6 system-ui, sans-serif;
+    padding: 24mm;
+  }
+  #print-fallback h1 { font-size: 20px; margin: 0 0 10px; }
+
+  /* The app rendered real sheets, so the explanatory page is not needed. */
+  html.printing #print-fallback { display: none !important; }
 }

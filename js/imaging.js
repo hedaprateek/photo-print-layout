@@ -6,7 +6,7 @@
   const IN = App.MM_PER_IN;
 
   App.DEFAULT_ADJ = Object.freeze({
-    auto: false,      // auto-levels + grey-world white balance
+    auto: false,      // auto-levels + implicit white balance
     exposure: 0,      // -100..100
     contrast: 0,      // -100..100
     saturation: 0,    // -100..100
@@ -48,6 +48,13 @@
     return c;
   }
 
+  function ctx2d(canvas) {
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    return ctx;
+  }
+
   App.canvasToBlob = function (canvas, type, quality) {
     return new Promise((resolve, reject) => {
       canvas.toBlob(
@@ -67,10 +74,7 @@
 
     while (sw / 2 >= targetW && sh / 2 >= targetH && sw > 2 && sh > 2) {
       const next = canvasOf(sw / 2, sh / 2);
-      const ctx = next.getContext('2d');
-      ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(cur, 0, 0, next.width, next.height);
+      ctx2d(next).drawImage(cur, 0, 0, next.width, next.height);
       if (cur !== source && cur.width) cur.width = 0; // release
       cur = next;
       sw = next.width;
@@ -78,10 +82,8 @@
     }
 
     const out = canvasOf(targetW, targetH);
-    const octx = out.getContext('2d');
-    octx.imageSmoothingEnabled = true;
-    octx.imageSmoothingQuality = 'high';
-    octx.drawImage(cur, 0, 0, out.width, out.height);
+    ctx2d(out).drawImage(cur, 0, 0, out.width, out.height);
+    if (cur !== source && cur !== out && cur.width) cur.width = 0;
     return out;
   };
 
@@ -93,6 +95,24 @@
   };
 
   /* ------------------------------------------------------------ print maths */
+
+  /* How the image is scaled inside its box. Shared by the renderer and the
+     crop editor so the preview and the print cannot disagree. */
+  App.slotGeometry = function (imgW, imgH, boxW, boxH, fit, zoom) {
+    const z = Math.max(1, zoom || 1);
+    const imgRatio = imgW / imgH;
+    const boxRatio = boxW / boxH;
+    let drawW;
+    let drawH;
+    if ((fit === 'cover') === (imgRatio > boxRatio)) {
+      drawH = boxH;
+      drawW = boxH * imgRatio;
+    } else {
+      drawW = boxW;
+      drawH = boxW / imgRatio;
+    }
+    return { drawW: drawW * z, drawH: drawH * z };
+  };
 
   /* Pixels-per-inch a photo will actually achieve in a slot of this size. */
   App.effectiveDpi = function (imgW, imgH, slotWmm, slotHmm, fit) {
@@ -113,10 +133,19 @@
   };
 
   /* Smallest upscale factor that lifts a photo to `targetDpi` in this slot. */
-  App.upscaleFactorFor = function (imgW, imgH, slotWmm, slotHmm, fit, targetDpi) {
-    const dpi = App.effectiveDpi(imgW, imgH, slotWmm, slotHmm, fit);
+  App.upscaleFactorFor = function (imgW, imgH, slotWmm, slotHmm, fit, targetDpi, zoom) {
+    const dpi = App.effectiveDpi(imgW, imgH, slotWmm, slotHmm, fit) / Math.max(1, zoom || 1);
     if (!dpi) return 1;
     return Math.max(1, (targetDpi || 300) / dpi);
+  };
+
+  /* Rendering more pixels than the source can supply costs memory and seconds
+     and adds no detail, so cap the bitmap at the photo's own resolution. The
+     printed size is unaffected — only the bitmap behind it gets smaller. */
+  App.renderDpiFor = function (imgW, imgH, slotWmm, slotHmm, fit, zoom, requestedDpi) {
+    const available = App.effectiveDpi(imgW, imgH, slotWmm, slotHmm, fit) / Math.max(1, zoom || 1);
+    if (!available) return requestedDpi;
+    return Math.max(72, Math.min(requestedDpi, Math.ceil(available)));
   };
 
   /* ------------------------------------------------------------ tone / colour */
@@ -184,8 +213,7 @@
     const warmth = (adj.warmth || 0) / 100;
     const sat = 1 + (adj.saturation || 0) / 100;
 
-    const needsTone = exposure !== 1 || contrast !== 1 || warmth !== 0;
-    if (needsTone) {
+    if (exposure !== 1 || contrast !== 1 || warmth !== 0) {
       const lut = [new Uint8ClampedArray(256), new Uint8ClampedArray(256), new Uint8ClampedArray(256)];
       const warmShift = [warmth * 22, warmth * 4, -warmth * 22];
       for (let c = 0; c < 3; c++) {
@@ -221,37 +249,31 @@
     const div = radius * 2 + 1;
 
     for (let pass = 0; pass < 3; pass++) {
-      // horizontal
       for (let y = 0; y < h; y++) {
         const row = y * w * 4;
         for (let c = 0; c < 3; c++) {
           let sum = 0;
           for (let k = -radius; k <= radius; k++) {
-            const x = Math.min(w - 1, Math.max(0, k));
-            sum += out[row + x * 4 + c];
+            sum += out[row + Math.min(w - 1, Math.max(0, k)) * 4 + c];
           }
           for (let x = 0; x < w; x++) {
             tmp[row + x * 4 + c] = sum / div;
-            const addX = Math.min(w - 1, x + radius + 1);
-            const subX = Math.max(0, x - radius);
-            sum += out[row + addX * 4 + c] - out[row + subX * 4 + c];
+            sum += out[row + Math.min(w - 1, x + radius + 1) * 4 + c]
+                 - out[row + Math.max(0, x - radius) * 4 + c];
           }
         }
       }
-      // vertical
       for (let x = 0; x < w; x++) {
         const col = x * 4;
         for (let c = 0; c < 3; c++) {
           let sum = 0;
           for (let k = -radius; k <= radius; k++) {
-            const y = Math.min(h - 1, Math.max(0, k));
-            sum += tmp[y * w * 4 + col + c];
+            sum += tmp[Math.min(h - 1, Math.max(0, k)) * w * 4 + col + c];
           }
           for (let y = 0; y < h; y++) {
             out[y * w * 4 + col + c] = sum / div;
-            const addY = Math.min(h - 1, y + radius + 1);
-            const subY = Math.max(0, y - radius);
-            sum += tmp[addY * w * 4 + col + c] - tmp[subY * w * 4 + col + c];
+            sum += tmp[Math.min(h - 1, y + radius + 1) * w * 4 + col + c]
+                 - tmp[Math.max(0, y - radius) * w * 4 + col + c];
           }
         }
       }
@@ -259,59 +281,85 @@
     return out;
   }
 
-  /* Unsharp mask. Ink spreads slightly on paper, so prints need more
-     sharpening than screens — this is the step that stops prints looking soft. */
-  function unsharpMask(imageData, w, h, amount, radius, threshold) {
-    if (amount <= 0) return;
-    const d = imageData.data;
-    const blurred = boxBlur(d, w, h, Math.max(1, radius));
+  /* Blur layer for the unsharp mask.
+
+     Above a pixel budget the blur is computed on a reduced copy and scaled back
+     up. An unsharp blur is low-frequency by definition, so this is visually
+     indistinguishable while being many times faster — the difference between a
+     600 DPI A3 slot taking half a minute and taking a moment. */
+  const BLUR_BUDGET = 1500000;
+
+  function blurLayer(canvas, data, w, h, radius) {
+    const pixels = w * h;
+    if (pixels <= BLUR_BUDGET) return boxBlur(data, w, h, radius);
+
+    const k = Math.ceil(Math.sqrt(pixels / BLUR_BUDGET));
+    const sw = Math.max(1, Math.round(w / k));
+    const sh = Math.max(1, Math.round(h / k));
+
+    const small = canvasOf(sw, sh);
+    const sctx = ctx2d(small);
+    sctx.drawImage(canvas, 0, 0, sw, sh); // the downscale is itself a low-pass
+    const sd = sctx.getImageData(0, 0, sw, sh);
+    const r = Math.max(1, Math.round(radius / k));
+    sd.data.set(boxBlur(sd.data, sw, sh, r));
+    sctx.putImageData(sd, 0, 0);
+
+    const up = canvasOf(w, h);
+    const uctx = ctx2d(up);
+    uctx.drawImage(small, 0, 0, w, h);
+    const blurred = uctx.getImageData(0, 0, w, h).data;
+
+    small.width = 0;
+    up.width = 0;
+    return blurred;
+  }
+
+  /* Ink spreads on paper, so prints need more sharpening than screens. This is
+     the step that stops prints looking soft. */
+  function unsharpCombine(data, blurred, amount, threshold) {
     const k = amount / 100;
     const thr = threshold || 2;
-    for (let i = 0; i < d.length; i += 4) {
+    for (let i = 0; i < data.length; i += 4) {
       for (let c = 0; c < 3; c++) {
-        const diff = d[i + c] - blurred[i + c];
-        if (diff > thr || diff < -thr) d[i + c] = d[i + c] + diff * k;
+        const diff = data[i + c] - blurred[i + c];
+        if (diff > thr || diff < -thr) data[i + c] = data[i + c] + diff * k;
       }
     }
   }
 
   /* ------------------------------------------------------- the print pipeline */
 
-  /* Draw `source` into a w×h pixel canvas: rotate, cover/contain-fit with a
-     focal point, then tone-correct and sharpen. Order matters — sharpening
-     must come last, after the image is at its final print resolution. */
+  /* Draw `source` into a pxW×pxH canvas: optional white border, rotation,
+     cover/contain fit with a focal point and zoom, then tone and sharpening.
+     Order matters — sharpening must come last, at final print resolution. */
   App.renderSlot = function (source, pxW, pxH, opts) {
     const o = opts || {};
     const fit = o.fit || 'cover';
-    const rot = ((o.rotate || 0) % 360 + 360) % 360;
+    const rot = (((o.rotate || 0) % 360) + 360) % 360;
     const focus = o.focus || { x: 0.5, y: 0.5 };
+    const zoom = Math.max(1, o.zoom || 1);
     const adj = Object.assign({}, App.DEFAULT_ADJ, o.adj || {});
+    const dpi = o.dpi || 300;
 
     const canvas = canvasOf(pxW, pxH);
-    const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    const ctx = ctx2d(canvas);
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+    // A white border reduces the area the photo occupies; everything below
+    // works against that inner box.
+    const border = Math.max(0, Math.round(((o.borderMm || 0) / IN) * dpi));
+    const innerW = Math.max(1, canvas.width - border * 2);
+    const innerH = Math.max(1, canvas.height - border * 2);
+
     const swapped = rot === 90 || rot === 270;
-    const boxW = swapped ? canvas.height : canvas.width;
-    const boxH = swapped ? canvas.width : canvas.height;
+    const boxW = swapped ? innerH : innerW;
+    const boxH = swapped ? innerW : innerH;
 
     const iw = source.naturalWidth || source.width;
     const ih = source.naturalHeight || source.height;
-    const imgRatio = iw / ih;
-    const boxRatio = boxW / boxH;
-
-    let drawW;
-    let drawH;
-    if ((fit === 'cover') === (imgRatio > boxRatio)) {
-      drawH = boxH;
-      drawW = boxH * imgRatio;
-    } else {
-      drawW = boxW;
-      drawH = boxW / imgRatio;
-    }
+    const { drawW, drawH } = App.slotGeometry(iw, ih, boxW, boxH, fit, zoom);
 
     // Pre-shrink big sources so the final draw is a mild resize, not a 10x one.
     let src = source;
@@ -320,10 +368,20 @@
     }
 
     ctx.save();
-    ctx.translate(canvas.width / 2, canvas.height / 2);
+    ctx.beginPath();
+    ctx.rect(border, border, innerW, innerH);
+    ctx.clip();
+    ctx.translate(border + innerW / 2, border + innerH / 2);
     if (rot) ctx.rotate((rot * Math.PI) / 180);
-    ctx.drawImage(src, -boxW / 2 + (boxW - drawW) * focus.x, -boxH / 2 + (boxH - drawH) * focus.y, drawW, drawH);
+    ctx.drawImage(
+      src,
+      -boxW / 2 + (boxW - drawW) * focus.x,
+      -boxH / 2 + (boxH - drawH) * focus.y,
+      drawW,
+      drawH
+    );
     ctx.restore();
+    if (src !== source && src.width) src.width = 0;
 
     const touchesTone =
       adj.auto || adj.exposure || adj.contrast || adj.saturation || adj.warmth || adj.sharpen > 0;
@@ -331,26 +389,29 @@
       const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
       if (adj.auto) autoLevels(data, 0.005);
       applyAdjustments(data, adj);
-      if (adj.sharpen > 0) {
-        // Scale radius with output resolution so 600 DPI isn't under-sharpened.
-        const radius = Math.max(1, Math.round((o.dpi || 300) / 300));
-        unsharpMask(data, canvas.width, canvas.height, adj.sharpen, radius, 2);
-      }
       ctx.putImageData(data, 0, 0);
+
+      if (adj.sharpen > 0) {
+        // Radius scales with output resolution so 600 DPI isn't under-sharpened.
+        const radius = Math.max(1, Math.round(dpi / 300));
+        const blurred = blurLayer(canvas, data.data, canvas.width, canvas.height, radius);
+        unsharpCombine(data.data, blurred, adj.sharpen, 2);
+        ctx.putImageData(data, 0, 0);
+      }
     }
 
     return canvas;
   };
 
-  /* Preview-sized render of a single photo with its adjustments applied,
-     used for the library thumbnails and the editor. */
+  /* Preview-sized render of a photo with its adjustments applied, used for the
+     library thumbnails. */
   App.previewAdjusted = function (source, maxEdge, adj) {
     const sw = source.naturalWidth || source.width;
     const sh = source.naturalHeight || source.height;
     const k = Math.min(1, maxEdge / Math.max(sw, sh));
     return App.renderSlot(source, Math.round(sw * k), Math.round(sh * k), {
       fit: 'contain',
-      adj: Object.assign({}, adj, { sharpen: 0 }), // sharpening is misleading at preview scale
+      adj: Object.assign({}, adj, { sharpen: 0 }), // sharpening misleads at preview scale
       dpi: 96
     });
   };
@@ -415,8 +476,6 @@
     return AI.instances[scale];
   }
 
-  /* Super-resolve `source` by 2x or 4x. Resolves to a canvas.
-     Rejects only if the AI path is unusable — callers fall back to resampling. */
   App.aiUpscale = async function (source, scale, onProgress) {
     const factor = scale >= 3 ? 4 : 2;
     const Upscaler = await loadAi(onProgress);
@@ -438,15 +497,15 @@
     return out;
   };
 
-  /* Public entry point: reach `targetLongEdge` pixels by the best available
-     means, preferring AI and silently degrading to stepped resampling. */
+  /* Public entry point: reach the requested factor by the best available means,
+     preferring AI and silently degrading to stepped resampling. */
   App.enlarge = async function (source, factor, onProgress) {
     const sw = source.naturalWidth || source.width;
     const sh = source.naturalHeight || source.height;
     const targetW = Math.round(sw * factor);
     const targetH = Math.round(sh * factor);
 
-    if (App.aiAvailable() && sw * sh <= 4_000_000) {
+    if (App.aiAvailable() && sw * sh <= 4000000) {
       try {
         let canvas = await App.aiUpscale(source, factor, onProgress);
         // ESRGAN only does fixed 2x/4x. Trim surplus resolution away, but never
@@ -462,13 +521,12 @@
 
     if (onProgress) onProgress('Resampling…');
     const out = canvasOf(targetW, targetH);
-    const ctx = out.getContext('2d');
-    ctx.imageSmoothingEnabled = true;
-    ctx.imageSmoothingQuality = 'high';
+    const ctx = ctx2d(out);
     ctx.drawImage(source, 0, 0, targetW, targetH);
     // A gentle unsharp pass restores the bite that any interpolation removes.
     const data = ctx.getImageData(0, 0, out.width, out.height);
-    unsharpMask(data, out.width, out.height, 45, Math.max(1, Math.round(factor)), 2);
+    const blurred = blurLayer(out, data.data, out.width, out.height, Math.max(1, Math.round(factor)));
+    unsharpCombine(data.data, blurred, 45, 2);
     ctx.putImageData(data, 0, 0);
     return { canvas: out, method: 'resample' };
   };
