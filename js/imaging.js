@@ -242,88 +242,129 @@
     }
   }
 
-  /* Separable box blur, run three times to approximate a Gaussian. */
-  function boxBlur(src, w, h, radius) {
+  /* Separable single-channel box blur, run three times to approximate a
+     Gaussian. Sharpening works on luminance only: it is three times cheaper
+     than blurring each colour channel, and it cannot introduce the coloured
+     fringes that per-channel sharpening leaves along high-contrast edges. */
+  function boxBlurPlane(src, w, h, radius) {
     const tmp = new Uint8ClampedArray(src.length);
     const out = new Uint8ClampedArray(src);
     const div = radius * 2 + 1;
 
     for (let pass = 0; pass < 3; pass++) {
       for (let y = 0; y < h; y++) {
-        const row = y * w * 4;
-        for (let c = 0; c < 3; c++) {
-          let sum = 0;
-          for (let k = -radius; k <= radius; k++) {
-            sum += out[row + Math.min(w - 1, Math.max(0, k)) * 4 + c];
-          }
-          for (let x = 0; x < w; x++) {
-            tmp[row + x * 4 + c] = sum / div;
-            sum += out[row + Math.min(w - 1, x + radius + 1) * 4 + c]
-                 - out[row + Math.max(0, x - radius) * 4 + c];
-          }
+        const row = y * w;
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += out[row + Math.min(w - 1, Math.max(0, k))];
+        for (let x = 0; x < w; x++) {
+          tmp[row + x] = sum / div;
+          sum += out[row + Math.min(w - 1, x + radius + 1)] - out[row + Math.max(0, x - radius)];
         }
       }
       for (let x = 0; x < w; x++) {
-        const col = x * 4;
-        for (let c = 0; c < 3; c++) {
-          let sum = 0;
-          for (let k = -radius; k <= radius; k++) {
-            sum += tmp[Math.min(h - 1, Math.max(0, k)) * w * 4 + col + c];
-          }
-          for (let y = 0; y < h; y++) {
-            out[y * w * 4 + col + c] = sum / div;
-            sum += tmp[Math.min(h - 1, y + radius + 1) * w * 4 + col + c]
-                 - tmp[Math.max(0, y - radius) * w * 4 + col + c];
-          }
+        let sum = 0;
+        for (let k = -radius; k <= radius; k++) sum += tmp[Math.min(h - 1, Math.max(0, k)) * w + x];
+        for (let y = 0; y < h; y++) {
+          out[y * w + x] = sum / div;
+          sum += tmp[Math.min(h - 1, y + radius + 1) * w + x] - tmp[Math.max(0, y - radius) * w + x];
         }
       }
     }
     return out;
   }
 
-  /* Blur layer for the unsharp mask.
+  function lumaPlane(data, w, h) {
+    const luma = new Uint8ClampedArray(w * h);
+    for (let i = 0, p = 0; p < luma.length; i += 4, p++) {
+      luma[p] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+    }
+    return luma;
+  }
 
-     Above a pixel budget the blur is computed on a reduced copy and scaled back
-     up. An unsharp blur is low-frequency by definition, so this is visually
-     indistinguishable while being many times faster — the difference between a
-     600 DPI A3 slot taking half a minute and taking a moment. */
-  const BLUR_BUDGET = 1500000;
+  function downsamplePlane(src, w, h, k) {
+    const sw = Math.ceil(w / k);
+    const sh = Math.ceil(h / k);
+    const out = new Uint8ClampedArray(sw * sh);
+    for (let y = 0; y < sh; y++) {
+      for (let x = 0; x < sw; x++) {
+        let sum = 0;
+        let n = 0;
+        for (let dy = 0; dy < k; dy++) {
+          const yy = y * k + dy;
+          if (yy >= h) break;
+          for (let dx = 0; dx < k; dx++) {
+            const xx = x * k + dx;
+            if (xx >= w) break;
+            sum += src[yy * w + xx];
+            n++;
+          }
+        }
+        out[y * sw + x] = sum / n;
+      }
+    }
+    return { plane: out, sw, sh };
+  }
 
-  function blurLayer(canvas, data, w, h, radius) {
-    const pixels = w * h;
-    if (pixels <= BLUR_BUDGET) return boxBlur(data, w, h, radius);
-
-    const k = Math.ceil(Math.sqrt(pixels / BLUR_BUDGET));
-    const sw = Math.max(1, Math.round(w / k));
-    const sh = Math.max(1, Math.round(h / k));
-
-    const small = canvasOf(sw, sh);
-    const sctx = ctx2d(small);
-    sctx.drawImage(canvas, 0, 0, sw, sh); // the downscale is itself a low-pass
-    const sd = sctx.getImageData(0, 0, sw, sh);
-    const r = Math.max(1, Math.round(radius / k));
-    sd.data.set(boxBlur(sd.data, sw, sh, r));
-    sctx.putImageData(sd, 0, 0);
-
-    const up = canvasOf(w, h);
-    const uctx = ctx2d(up);
-    uctx.drawImage(small, 0, 0, w, h);
-    const blurred = uctx.getImageData(0, 0, w, h).data;
-
-    small.width = 0;
-    up.width = 0;
-    return blurred;
+  function upsamplePlane(src, sw, sh, w, h) {
+    const out = new Uint8ClampedArray(w * h);
+    const xr = sw / w;
+    const yr = sh / h;
+    for (let y = 0; y < h; y++) {
+      const sy = y * yr;
+      const y0 = sy | 0;
+      const y1 = Math.min(sh - 1, y0 + 1);
+      const fy = sy - y0;
+      const row0 = y0 * sw;
+      const row1 = y1 * sw;
+      const orow = y * w;
+      for (let x = 0; x < w; x++) {
+        const sx = x * xr;
+        const x0 = sx | 0;
+        const x1 = Math.min(sw - 1, x0 + 1);
+        const fx = sx - x0;
+        const a = src[row0 + x0];
+        const b = src[row0 + x1];
+        const c = src[row1 + x0];
+        const d = src[row1 + x1];
+        out[orow + x] = a + (b - a) * fx + (c - a) * fy + (a - b - c + d) * fx * fy;
+      }
+    }
+    return out;
   }
 
   /* Ink spreads on paper, so prints need more sharpening than screens. This is
-     the step that stops prints looking soft. */
-  function unsharpCombine(data, blurred, amount, threshold) {
-    const k = amount / 100;
-    const thr = threshold || 2;
-    for (let i = 0; i < data.length; i += 4) {
-      for (let c = 0; c < 3; c++) {
-        const diff = data[i + c] - blurred[i + c];
-        if (diff > thr || diff < -thr) data[i + c] = data[i + c] + diff * k;
+     the step that stops prints looking soft.
+
+     Big slots blur a reduced copy, but only by a factor the kernel can absorb:
+     `k` never exceeds the radius, and the reduced blur uses radius/k, so the
+     effective kernel stays the size that was asked for. Shrinking further would
+     be much faster but would quietly widen the kernel and turn fine-detail
+     sharpening into a local-contrast effect — a different filter, not a cheaper
+     one. */
+  function sharpen(data, w, h, amount, radius) {
+    if (amount <= 0) return;
+    const luma = lumaPlane(data, w, h);
+
+    let blurred;
+    const k = Math.max(1, Math.min(Math.floor(radius), 4));
+    if (k < 2) {
+      blurred = boxBlurPlane(luma, w, h, radius);
+    } else {
+      const small = downsamplePlane(luma, w, h, k);
+      const reduced = boxBlurPlane(small.plane, small.sw, small.sh, Math.max(1, Math.round(radius / k)));
+      blurred = upsamplePlane(reduced, small.sw, small.sh, w, h);
+    }
+
+    const gain = amount / 100;
+    const threshold = 2;
+    for (let i = 0, p = 0; p < luma.length; i += 4, p++) {
+      const diff = luma[p] - blurred[p];
+      if (diff > threshold || diff < -threshold) {
+        const add = diff * gain;
+        // Uint8ClampedArray clamps for us.
+        data[i] += add;
+        data[i + 1] += add;
+        data[i + 2] += add;
       }
     }
   }
@@ -394,8 +435,7 @@
       if (adj.sharpen > 0) {
         // Radius scales with output resolution so 600 DPI isn't under-sharpened.
         const radius = Math.max(1, Math.round(dpi / 300));
-        const blurred = blurLayer(canvas, data.data, canvas.width, canvas.height, radius);
-        unsharpCombine(data.data, blurred, adj.sharpen, 2);
+        sharpen(data.data, canvas.width, canvas.height, adj.sharpen, radius);
         ctx.putImageData(data, 0, 0);
       }
     }
@@ -525,8 +565,7 @@
     ctx.drawImage(source, 0, 0, targetW, targetH);
     // A gentle unsharp pass restores the bite that any interpolation removes.
     const data = ctx.getImageData(0, 0, out.width, out.height);
-    const blurred = blurLayer(out, data.data, out.width, out.height, Math.max(1, Math.round(factor)));
-    unsharpCombine(data.data, blurred, 45, 2);
+    sharpen(data.data, out.width, out.height, 45, Math.max(1, Math.round(factor)));
     ctx.putImageData(data, 0, 0);
     return { canvas: out, method: 'resample' };
   };

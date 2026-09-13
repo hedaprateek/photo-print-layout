@@ -154,12 +154,24 @@ milliseconds, so the preview stays live while you type.
 
 ### Keeping it fast
 
-Two things stop high-resolution work from locking up the page. Bitmaps are never
-rendered beyond the source photo's own resolution — asking for 600 DPI from a
-1200×1800 file renders at 300 and prints at exactly the same physical size, with
-no detail lost. And the unsharp mask computes its blur on a reduced copy, which
-is visually identical because the blur is low-frequency by definition. Together
-these took a 600 DPI A3 slot from about 26 seconds to under 10.
+The largest win is simply not doing pointless work: bitmaps are never rendered
+beyond the source photo's own resolution. Asking for 600 DPI from a 1200×1800
+file renders at 300 and prints at exactly the same physical size, with no detail
+lost and a quarter of the pixels.
+
+Sharpening is then made cheaper in two ways that do not change the filter. It
+runs on luminance rather than each colour channel, which is three times less
+work and also avoids the coloured fringes that per-channel sharpening leaves
+along edges. And for large slots the blur is computed on a reduced copy — but
+only by a factor the kernel can absorb, never more than the radius itself, with
+the reduced blur using `radius / k` so the effective kernel stays the size that
+was asked for.
+
+That restraint matters. Shrinking by an arbitrary factor is far faster and was
+tried first, but at 600 DPI it turned a 2-pixel kernel into a ~12-pixel one:
+fine-detail sharpening quietly became a local-contrast effect, differing from
+the true blur by about 10 levels out of 255. It was a different filter, not a
+cheaper one, so it was reverted.
 
 Repeated slots are rendered once and embedded once: a sheet of 30 identical
 passport photos stores one bitmap, not thirty.
