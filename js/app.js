@@ -258,6 +258,7 @@
       zoom: photo.zoom,
       adj: photo.adj,
       sizes: photo.sizes,
+      texts: photo.texts,
       version: photo.version,
       enhanced: photo.enhanced
     });
@@ -310,6 +311,7 @@
       zoom: 1,
       adj: Object.assign({}, App.DEFAULT_ADJ),
       sizes: [defaultSizeRow()],
+      texts: [],
       version: 0,
       enhanced: null
     };
@@ -381,6 +383,7 @@
         r.sizes && r.sizes.length
           ? r.sizes
           : [{ sizeId: r.sizeId || 'id_35x45', customW: r.customW || 60, customH: r.customH || 80, copies: r.copies || 1 }];
+      photo.texts = r.texts || [];
       photo.thumbUrl = r.thumbBlob ? URL.createObjectURL(r.thumbBlob) : null;
       photo.previewUrl = null;
       state.photos.push(photo);
@@ -986,6 +989,7 @@
       printerSel.appendChild(o);
     }
 
+    fillTextSelects();
     fillPresetSelect('');
   }
 
@@ -1061,6 +1065,8 @@
         beforeFocus: Object.assign({}, photo.focus),
         beforeZoom: photo.zoom || 1,
         beforeRotate: photo.rotate || 0,
+        beforeTexts: JSON.parse(JSON.stringify(photo.texts || [])),
+        selectedTextId: null,
         frame: null
       };
 
@@ -1098,6 +1104,14 @@
     const warning = App.profileWarning(photo.profile);
     $('editor-profile').hidden = !warning;
     if (warning) $('editor-profile').textContent = warning;
+
+    if (editing) {
+      const texts = photo.texts || [];
+      const stillThere = texts.some((t) => t.id === editing.selectedTextId);
+      if (!stillThere) editing.selectedTextId = texts.length ? texts[0].id : null;
+      renderTextList(photo);
+      syncTextControls(photo);
+    }
   }
 
   /* Live preview of exactly what will land in the slot: cropped, rotated and
@@ -1147,6 +1161,8 @@
 
     updateGuide(targetSizeDef(photo), rot);
     updateDpiReport(photo, target, rs);
+    // The preview image has just been replaced, so its box may have resized.
+    renderTextOverlay();
   }
 
   /* Identity photos are rejected when the head is the wrong size or the eyes sit
@@ -1288,6 +1304,7 @@
     const snapshot = editing;
     const changed =
       JSON.stringify(snapshot.before) !== JSON.stringify(photo.adj) ||
+      JSON.stringify(snapshot.beforeTexts) !== JSON.stringify(photo.texts || []) ||
       snapshot.beforeZoom !== (photo.zoom || 1) ||
       snapshot.beforeRotate !== (photo.rotate || 0) ||
       snapshot.beforeFocus.x !== photo.focus.x ||
@@ -1299,6 +1316,7 @@
         photo.focus = Object.assign({}, snapshot.beforeFocus);
         photo.zoom = snapshot.beforeZoom;
         photo.rotate = snapshot.beforeRotate;
+        photo.texts = JSON.parse(JSON.stringify(snapshot.beforeTexts));
         refreshPreviewImage(photo).then(refreshSoon);
         persistPhoto(photo);
       });
@@ -1308,6 +1326,197 @@
     await refreshPreviewImage(photo);
     persistPhoto(photo);
     refresh();
+  }
+
+  /* ------------------------------------------------------------------ text */
+
+  function selectedText(photo) {
+    if (!editing || !editing.selectedTextId) return null;
+    return (photo.texts || []).find((t) => t.id === editing.selectedTextId) || null;
+  }
+
+  function fillTextSelects() {
+    const style = $('text-style');
+    for (const s of App.TEXT_STYLES) {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = s.name;
+      style.appendChild(o);
+    }
+    const font = $('text-font');
+    for (const f of App.TEXT_FONTS) {
+      const o = document.createElement('option');
+      o.value = f.id;
+      o.textContent = f.name;
+      font.appendChild(o);
+    }
+  }
+
+  function renderTextList(photo) {
+    const host = $('text-list');
+    host.innerHTML = '';
+    for (const t of photo.texts || []) {
+      const li = document.createElement('li');
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'text-chip' + (t.id === editing.selectedTextId ? ' is-active' : '');
+      chip.textContent = (t.text || '(empty)').replace(/\n/g, ' ').slice(0, 30);
+      chip.addEventListener('click', () => {
+        editing.selectedTextId = t.id;
+        renderTextList(photo);
+        syncTextControls(photo);
+        renderTextOverlay();
+      });
+      li.appendChild(chip);
+      host.appendChild(li);
+    }
+    $('text-editor').hidden = !selectedText(photo);
+  }
+
+  function syncTextControls(photo) {
+    const t = selectedText(photo);
+    $('text-editor').hidden = !t;
+    if (!t) return;
+    // Don't fight the caret while the user is typing in the box.
+    if (document.activeElement !== $('text-content')) $('text-content').value = t.text;
+    $('text-style').value = t.style;
+    $('text-font').value = t.font;
+    $('text-size').value = Math.round(t.sizePct * 100);
+    $('v-text-size').textContent = Math.round(t.sizePct * 100) + '%';
+    $('text-color').value = t.color;
+    $('text-accent').value = t.accent;
+    document.querySelectorAll('[data-align]').forEach((b) =>
+      b.classList.toggle('is-active', b.dataset.align === t.align)
+    );
+    $('btn-text-bold').classList.toggle('is-active', !!t.bold);
+    $('btn-text-italic').classList.toggle('is-active', !!t.italic);
+  }
+
+  function renderTextOverlay() {
+    const host = $('text-overlay');
+    if (!host) return;
+    host.innerHTML = '';
+    const photo = editing && state.photos.find((p) => p.id === editing.id);
+    if (!photo || !photo.texts || !photo.texts.length) return;
+
+    const img = $('editor-after');
+    const boxW = img.clientWidth;
+    const boxH = img.clientHeight;
+    if (!boxW || !boxH) {
+      // Opening the editor sets the preview's src but the browser has not laid
+      // it out yet, so there is no box to place words in. Come back when there
+      // is, or a photo that already has text would open showing none of it.
+      img.addEventListener('load', renderTextOverlay, { once: true });
+      return;
+    }
+
+    for (const t of photo.texts) {
+      const el = App.buildTextEl(t, boxW, boxH, 'px');
+      if (!el) continue;
+      el.dataset.textId = t.id;
+      if (t.id === editing.selectedTextId) el.classList.add('is-selected');
+      host.appendChild(el);
+    }
+  }
+
+  function textChanged(photo) {
+    App.clearSlotCache();
+    renderTextOverlay();
+    persistPhoto(photo);
+    refreshSoon();
+  }
+
+  function addText() {
+    const photo = editing && state.photos.find((p) => p.id === editing.id);
+    if (!photo) return;
+    photo.texts = photo.texts || [];
+    const t = App.defaultText();
+    photo.texts.push(t);
+    editing.selectedTextId = t.id;
+    renderTextList(photo);
+    syncTextControls(photo);
+    textChanged(photo);
+    $('text-content').focus();
+    $('text-content').select();
+  }
+
+  function deleteText() {
+    const photo = editing && state.photos.find((p) => p.id === editing.id);
+    const t = photo && selectedText(photo);
+    if (!t) return;
+    photo.texts = photo.texts.filter((x) => x.id !== t.id);
+    editing.selectedTextId = photo.texts.length ? photo.texts[photo.texts.length - 1].id : null;
+    renderTextList(photo);
+    syncTextControls(photo);
+    textChanged(photo);
+  }
+
+  /* `resync` repaints the controls too — needed for toggles, but not while
+     typing, where rewriting the textarea would move the caret. */
+  function updateSelectedText(apply, resync) {
+    const photo = editing && state.photos.find((p) => p.id === editing.id);
+    const t = photo && selectedText(photo);
+    if (!t) return;
+    apply(t);
+    renderTextList(photo);
+    if (resync) syncTextControls(photo);
+    textChanged(photo);
+  }
+
+  /* Words are dragged directly on the preview. The overlay itself ignores
+     pointer events, so a drag starting on empty space still pans the photo. */
+  function wireTextDrag() {
+    const host = $('text-overlay');
+    let active = null;
+    let startX = 0;
+    let startY = 0;
+    let fromX = 0;
+    let fromY = 0;
+    let boxW = 1;
+    let boxH = 1;
+
+    const onMove = (e) => {
+      if (!active) return;
+      active.xPct = clamp(fromX + (e.clientX - startX) / boxW, 0, 1);
+      active.yPct = clamp(fromY + (e.clientY - startY) / boxH, 0, 1);
+      renderTextOverlay();
+    };
+    const onUp = () => {
+      if (!active) return;
+      active = null;
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      const photo = editing && state.photos.find((p) => p.id === editing.id);
+      if (photo) textChanged(photo);
+    };
+
+    host.addEventListener('pointerdown', (e) => {
+      const el = e.target.closest('.ptext');
+      if (!el) return;
+      const photo = editing && state.photos.find((p) => p.id === editing.id);
+      if (!photo) return;
+      const t = (photo.texts || []).find((x) => x.id === el.dataset.textId);
+      if (!t) return;
+
+      e.preventDefault();
+      e.stopPropagation(); // keep the photo from panning underneath
+      editing.selectedTextId = t.id;
+
+      const img = $('editor-after');
+      boxW = img.clientWidth || 1;
+      boxH = img.clientHeight || 1;
+      active = t;
+      startX = e.clientX;
+      startY = e.clientY;
+      fromX = t.xPct;
+      fromY = t.yPct;
+
+      renderTextList(photo);
+      syncTextControls(photo);
+      renderTextOverlay();
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onUp);
+    });
   }
 
   /* ------------------------------------------------------------- upscaling */
@@ -1886,6 +2095,40 @@
     );
 
     wireCropDrag();
+    wireTextDrag();
+
+    /* text on the photo */
+    $('btn-add-text').addEventListener('click', addText);
+    $('btn-text-delete').addEventListener('click', deleteText);
+    $('text-content').addEventListener('input', (e) =>
+      updateSelectedText((t) => (t.text = e.target.value))
+    );
+    $('text-style').addEventListener('change', (e) =>
+      updateSelectedText((t) => (t.style = e.target.value))
+    );
+    $('text-font').addEventListener('change', (e) =>
+      updateSelectedText((t) => (t.font = e.target.value))
+    );
+    $('text-size').addEventListener('input', (e) => {
+      const pct = clamp(parseInt(e.target.value, 10) || 9, 2, 30);
+      $('v-text-size').textContent = pct + '%';
+      updateSelectedText((t) => (t.sizePct = pct / 100));
+    });
+    $('text-color').addEventListener('input', (e) =>
+      updateSelectedText((t) => (t.color = e.target.value))
+    );
+    $('text-accent').addEventListener('input', (e) =>
+      updateSelectedText((t) => (t.accent = e.target.value))
+    );
+    $('btn-text-bold').addEventListener('click', () =>
+      updateSelectedText((t) => (t.bold = !t.bold), true)
+    );
+    $('btn-text-italic').addEventListener('click', () =>
+      updateSelectedText((t) => (t.italic = !t.italic), true)
+    );
+    document.querySelectorAll('[data-align]').forEach((b) =>
+      b.addEventListener('click', () => updateSelectedText((t) => (t.align = b.dataset.align), true))
+    );
 
     /* search */
     $('btn-search').addEventListener('click', () => {
@@ -1985,7 +2228,12 @@
     });
 
     /* keep the preview scaled to the window */
-    window.addEventListener('resize', () => scalePreview());
+    window.addEventListener('resize', () => {
+      scalePreview();
+      // The editor's preview image resizes with the dialog, and the words are
+      // positioned against its box, so they have to be laid out again.
+      if (!$('modal-editor').hidden) renderTextOverlay();
+    });
     if ('ResizeObserver' in window) {
       new ResizeObserver(() => scalePreview()).observe($('preview'));
     }

@@ -350,6 +350,25 @@ select { cursor: pointer; }
 
 .cut-marks { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
 
+/* ------------------------------------------------------------ text overlays */
+
+/* Sits in the photo's own frame, so it turns with a sideways-packed print. */
+.text-layer { position: absolute; left: 50%; top: 50%; pointer-events: none; }
+
+.ptext {
+  position: absolute;
+  margin: 0;
+  white-space: pre;
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* In the editor the overlay must let drags through to the photo underneath,
+   while the words themselves stay grabbable. */
+.text-overlay { position: absolute; inset: 0; pointer-events: none; }
+.text-overlay .ptext { pointer-events: auto; cursor: move; }
+.text-overlay .ptext.is-selected { outline: 1px dashed rgba(140,170,255,.95); outline-offset: 3px; }
+
 /* ------------------------------------------------------------------ modals */
 
 .modal {
@@ -437,6 +456,37 @@ select { cursor: pointer; }
 
 .rotate-row { display: flex; align-items: center; gap: 8px; }
 .rotate-row .field-label { flex: 1; }
+
+.seg-3 { grid-template-columns: repeat(3, 1fr); }
+
+textarea {
+  font: inherit; width: 100%; padding: 7px 9px; resize: vertical;
+  background: var(--bg-3); color: var(--text);
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+input[type="color"] {
+  width: 100%; height: 32px; padding: 2px; cursor: pointer;
+  background: var(--bg-3); border: 1px solid var(--line); border-radius: var(--radius-sm);
+}
+
+.chip.is-active { background: var(--accent-dim); color: #fff; border-color: transparent; }
+
+.text-block { display: flex; flex-direction: column; gap: 9px; }
+.text-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.text-head .btn { padding: 5px 10px; font-size: 12px; }
+
+.text-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+
+.text-chip {
+  width: 100%; text-align: left; font: inherit; font-size: 12px;
+  padding: 5px 9px; border-radius: var(--radius-sm);
+  background: var(--bg-3); color: var(--text-dim);
+  border: 1px solid var(--line); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.text-chip.is-active { border-color: var(--accent); color: var(--text); background: #1e2338; }
 
 .focus-block { display: flex; flex-direction: column; gap: 7px; margin-top: 8px; }
 

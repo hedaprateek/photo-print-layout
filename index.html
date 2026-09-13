@@ -250,6 +250,7 @@
               <img id="editor-after" alt="How the photo will print" draggable="false">
               <svg id="crop-guide" class="crop-guide" viewBox="0 0 100 100"
                    preserveAspectRatio="none" aria-hidden="true" hidden></svg>
+              <div id="text-overlay" class="text-overlay"></div>
               <span class="crop-hint" id="crop-hint">Drag to reposition</span>
             </div>
             <figcaption>How it will print</figcaption>
@@ -302,6 +303,51 @@
           </div>
           <p class="muted small">Or just drag the photo on the right. For identity
              sizes the overlay shows where the head and eyes must sit.</p>
+        </div>
+
+        <hr class="rule">
+        <div class="text-block">
+          <div class="text-head">
+            <span class="field-label">Text on the photo</span>
+            <button id="btn-add-text" class="btn btn-soft" type="button">Add text</button>
+          </div>
+          <ul id="text-list" class="text-list"></ul>
+
+          <div id="text-editor" hidden>
+            <label class="field"><span class="field-label">Words</span>
+              <textarea id="text-content" rows="2" placeholder="Name, date, caption…"></textarea></label>
+
+            <div class="field-row">
+              <label class="field"><span class="field-label">Style</span>
+                <select id="text-style"></select></label>
+              <label class="field"><span class="field-label">Typeface</span>
+                <select id="text-font"></select></label>
+            </div>
+
+            <label class="slider"><span>Size <b id="v-text-size">9%</b></span>
+              <input id="text-size" type="range" min="2" max="30" value="9"></label>
+
+            <div class="field-row">
+              <label class="field"><span class="field-label">Colour</span>
+                <input id="text-color" type="color" value="#ffffff"></label>
+              <label class="field"><span class="field-label">Outline / panel</span>
+                <input id="text-accent" type="color" value="#000000"></label>
+            </div>
+
+            <div class="seg seg-3" role="group" aria-label="Text alignment">
+              <button class="seg-btn" data-align="left" type="button">Left</button>
+              <button class="seg-btn is-active" data-align="center" type="button">Centre</button>
+              <button class="seg-btn" data-align="right" type="button">Right</button>
+            </div>
+
+            <div class="quick-row">
+              <button id="btn-text-bold" class="chip" type="button">Bold</button>
+              <button id="btn-text-italic" class="chip" type="button">Italic</button>
+              <button id="btn-text-delete" class="chip" type="button">Delete</button>
+            </div>
+            <p class="muted small">Drag the words on the preview to place them. Size is a
+               share of the photo, so it stays right at every print size.</p>
+          </div>
         </div>
 
         <hr class="rule">
@@ -403,6 +449,7 @@
 <script src="js/idb.js"></script>
 <script src="js/profile.js"></script>
 <script src="js/imaging.js"></script>
+<script src="js/text.js"></script>
 <script src="js/layout.js"></script>
 <script src="js/search.js"></script>
 <script src="js/render.js"></script>

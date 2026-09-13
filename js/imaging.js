@@ -440,6 +440,20 @@
       }
     }
 
+    // Text goes on last: it must not be auto-levelled or sharpened, which would
+    // halo every glyph edge. It sits in the photo's own frame rather than the
+    // paper's, so a photo the packer turned sideways carries its caption round
+    // with it and reads correctly once the print is cut out.
+    if (o.texts && o.texts.length && App.drawTexts) {
+      const packRot = (((o.packRot || 0) % 360) + 360) % 360;
+      const packSwapped = packRot === 90 || packRot === 270;
+      ctx.save();
+      ctx.translate(border + innerW / 2, border + innerH / 2);
+      if (packRot) ctx.rotate((packRot * Math.PI) / 180);
+      App.drawTexts(ctx, o.texts, packSwapped ? innerH : innerW, packSwapped ? innerW : innerH);
+      ctx.restore();
+    }
+
     return canvas;
   };
 

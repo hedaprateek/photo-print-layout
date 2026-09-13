@@ -84,6 +84,28 @@
 
       frame.appendChild(img);
       clip.appendChild(frame);
+
+      // On screen the images are plain thumbnails, so the words are added as
+      // DOM. When printing, getSrc hands back full-resolution renders that
+      // already have the text drawn into them — adding it again would print
+      // every caption twice.
+      if (!settings.textBaked && photo.texts && photo.texts.length && App.buildTextEl) {
+        const packRot = item.rot ? 90 : 0;
+        const packSwapped = packRot === 90 || packRot === 270;
+        const tW = packSwapped ? inner.h : inner.w;
+        const tH = packSwapped ? inner.w : inner.h;
+        const layer = document.createElement('div');
+        layer.className = 'text-layer';
+        layer.style.width = tW + 'mm';
+        layer.style.height = tH + 'mm';
+        layer.style.transform = 'translate(-50%, -50%) rotate(' + packRot + 'deg)';
+        for (const t of photo.texts) {
+          const el = App.buildTextEl(t, tW, tH, 'mm');
+          if (el) layer.appendChild(el);
+        }
+        clip.appendChild(layer);
+      }
+
       photoBox.appendChild(clip);
       slot.appendChild(photoBox);
 
@@ -208,7 +230,8 @@
       round2(inner.border),
       round2(photo.zoom || 1),
       photo.focus ? round2(photo.focus.x) + ':' + round2(photo.focus.y) : '',
-      adjKey(photo.adj)
+      adjKey(photo.adj),
+      App.textKey(photo.texts)
     ].join('|');
     return { key, dpi, fit, inner };
   }
@@ -221,7 +244,11 @@
       zoom: photo.zoom,
       adj: photo.adj,
       dpi: plan.dpi,
-      borderMm: plan.inner.border
+      borderMm: plan.inner.border,
+      texts: photo.texts,
+      // Only the packer's rotation, not the user's: text is placed on the photo
+      // as the editor shows it, then turns with it if it is laid sideways.
+      packRot: item.rot ? 90 : 0
     };
   }
 
@@ -276,10 +303,13 @@
     const getSrc = await App.renderSlots(pages, photosById, settings, onStatus);
     if (onStatus) onStatus('Preparing print…');
 
+    // renderSlots has already drawn the text into each bitmap.
+    const printSettings = Object.assign({}, settings, { textBaked: true });
+
     const root = document.createElement('div');
     root.id = 'print-root';
     for (const page of pages) {
-      root.appendChild(App.buildSheet(page, paper, photosById, settings, getSrc));
+      root.appendChild(App.buildSheet(page, paper, photosById, printSettings, getSrc));
     }
 
     const old = document.getElementById('print-root');

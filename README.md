@@ -64,6 +64,18 @@ up to 4×, or pick one of nine anchors. For passport and visa sizes an overlay
 shows where the head and eyes have to sit — the rules that get applications
 rejected.
 
+**Text on the photo** — a name, a date, a caption, a watermark. Add as many
+pieces as you like and drag each one into place on the preview. Five styles:
+plain, soft shadow, outlined, a banner panel behind the words, or a caption bar
+across the photo. Five typefaces, any colour, bold and italic, left/centre/right,
+and multiple lines. Size is a share of the photo rather than a pixel count, so
+the same text looks right whether it prints at stamp size or 8R.
+
+Text is drawn into the print at full resolution *after* sharpening, so glyph
+edges never pick up halos, and it sits in the photo's own frame — a print the
+packer lays sideways to save paper carries its caption round with it and still
+reads correctly once cut out.
+
 **AI upscaling** for photos that are genuinely too small. It runs an ESRGAN
 super-resolution model in your browser via TensorFlow.js — it reconstructs
 detail rather than just stretching pixels. The model (~5 MB) downloads only when
@@ -131,6 +143,7 @@ is exactly what runs.
 | `js/layout.js` | Grid fitting, area maximising, MaxRects packing, contact sheets |
 | `js/imaging.js` | Resampling, auto-levels, unsharp masking, AI upscaling |
 | `js/profile.js` | ICC / PNG colour-profile reader |
+| `js/text.js` | Text overlays: styles, and the canvas and DOM renderers |
 | `js/render.js` | Screen preview, print DOM, crop marks, PDF export |
 | `js/search.js` | Wikimedia Commons, Pexels and Unsplash providers |
 | `js/idb.js` | IndexedDB photo persistence |
