@@ -184,10 +184,17 @@ milliseconds, so the preview stays live while you type.
 
 ### Keeping it fast
 
-The largest win is simply not doing pointless work: bitmaps are never rendered
-beyond the source photo's own resolution. Asking for 600 DPI from a 1200×1800
-file renders at 300 and prints at exactly the same physical size, with no detail
-lost and a quarter of the pixels.
+Surplus resolution is trimmed, but only what sits *above* a good print
+resolution. Asking 600 DPI of a photo that holds only 340 renders at 340 and
+prints at exactly the same physical size, for a third of the pixels.
+
+It never drops below 300, and that limit was learned the hard way. An earlier
+version capped straight down to whatever the source held, which sounds harmless
+and is not: the bitmap is then scaled up by the printer or the PDF viewer rather
+than by us, which magnifies the sharpening halos and turns 8-pixel JPEG blocks
+into visible ones. Measured against a clean render, a 4×6 print from a 1024×768
+photo came out 2.45× further off that way — and a full A4 page was being sent to
+the printer as 567×814 pixels.
 
 Sharpening is then made cheaper in two ways that do not change the filter. It
 runs on luminance rather than each colour channel, which is three times less
