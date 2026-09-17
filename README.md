@@ -45,6 +45,18 @@ one click. `Ctrl+Z` undoes removals, reordering and edits.
 
 ## The parts that matter for printing
 
+**It does not crop unless you ask it to.** The print is trimmed to the photo's
+own shape, so nothing is cut off and no white padding is added either — a 4:3
+photo at 4R prints 135 × 102 mm rather than losing its top and bottom or
+floating in a white band. The print also turns to match the photo, so a portrait
+picture never lands in a landscape frame and lose its sides. Two other modes are
+there when you want them: *Fill & crop* for an exact size with the overflow cut
+away, and *Exact size* to keep the stated dimensions and add white margins.
+
+Identity sizes are the deliberate exception. A passport photo is 35 × 45 mm
+whatever shape the original is, so those keep their official size and are
+cropped to it — that one is not the app's call to make.
+
 **It tells you when a photo is too small.** Every photo shows the resolution it
 will actually achieve at the size you chose — `214 DPI · Acceptable`,
 `96 DPI · Too low`. This is the usual reason prints disappoint, and you find out

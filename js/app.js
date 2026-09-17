@@ -20,7 +20,9 @@
       orientation: 'portrait',
       margin: 5,
       gap: 2,
-      fit: 'cover',
+      fit: 'whole',        // never crop unless asked; see shapedSize()
+      autoOrient: true,    // turn the print to match the photo
+      fitChosen: false,    // true once the user picks a fit themselves
       cutMarks: 'ticks',
       dpi: 300,
       allowRotate: true,
@@ -131,6 +133,9 @@
       }
       delete s.cutLines;
       Object.assign(state.settings, s);
+      // Cropping should never be the default. Anyone still on the old
+      // fill-and-crop setting who never picked it deliberately moves across.
+      if (!state.settings.fitChosen) state.settings.fit = 'whole';
       Object.assign(state.grid, raw.grid || {});
     } catch (e) {
       /* ignore corrupt settings */
@@ -233,9 +238,59 @@
     return { w: s.w, h: s.h };
   }
 
+  /* The slot a photo should actually occupy.
+
+     Two things go wrong when the slot's shape is dictated by the print size
+     instead of the picture. A portrait photo dropped into a landscape slot
+     loses its sides — which is what "cropped at the landscape ends" is — and
+     fitting the whole photo instead pads the difference with white, wasting
+     paper. So the slot is turned to match the photo's orientation, and in
+     "whole photo" mode trimmed to the photo's exact shape: no crop, no padding.
+
+     Identity sizes are the deliberate exception. A passport photo is 35×45
+     whatever shape the original is, so it keeps its official size and is
+     cropped to it — that one is not ours to decide. */
+  function shapedSize(box, photo, sizeId) {
+    const s = state.settings;
+    let w = box.w;
+    let h = box.h;
+    if (!photo || !photo.w || !photo.h) return { w, h };
+
+    const def = sizeId && sizeId !== 'custom' ? App.findSize(sizeId) : null;
+    if (def && def.guide) return { w, h };
+
+    const rot = (((photo.rotate || 0) % 360) + 360) % 360;
+    const turned = rot === 90 || rot === 270;
+    const aspect = (turned ? photo.h : photo.w) / (turned ? photo.w : photo.h);
+
+    // A near-square photo has no orientation worth matching.
+    if (s.autoOrient && Math.abs(aspect - 1) > 0.02 && (aspect > 1) !== (w > h)) {
+      const t = w;
+      w = h;
+      h = t;
+    }
+
+    if (s.fit === 'whole') {
+      let nw = w;
+      let nh = w / aspect;
+      if (nh > h) {
+        nh = h;
+        nw = h * aspect;
+      }
+      w = nw;
+      h = nh;
+    }
+    return { w, h };
+  }
+
   function photoSizeRows(photo) {
     const rows = photo.sizes && photo.sizes.length ? photo.sizes : [defaultSizeRow()];
-    return rows.map((r) => Object.assign({ sizeId: r.sizeId, copies: r.copies || 0 }, rowDims(r)));
+    return rows.map((r) =>
+      Object.assign(
+        { sizeId: r.sizeId, copies: r.copies || 0 },
+        shapedSize(rowDims(r), photo, r.sizeId)
+      )
+    );
   }
 
   function persistPhoto(photo) {
@@ -426,9 +481,12 @@
       );
       return best || { w: 50, h: 70 };
     }
-    if (g.sizeId === 'custom') return { w: g.customW, h: g.customH };
+    const ref = photo || selectedPhoto();
+    if (g.sizeId === 'custom') {
+      return shapedSize({ w: g.customW, h: g.customH }, ref, 'custom');
+    }
     const s = App.findSize(g.sizeId);
-    return { w: s.w, h: s.h };
+    return shapedSize({ w: s.w, h: s.h }, ref, g.sizeId);
   }
 
   function contactCellSize(paper) {
@@ -447,6 +505,9 @@
       s.borderMm = 0;
     } else {
       s.contactLabels = false;
+      // The slot was already trimmed to the photo's shape, so filling it crops
+      // nothing. Identity sizes kept their official shape, and those do crop.
+      if (s.fit === 'whole') s.fit = 'cover';
     }
     return s;
   }
@@ -1016,6 +1077,7 @@
     $('border-mm').value = s.borderMm;
     $('cut-marks').value = s.cutMarks;
     $('allow-rotate').checked = s.allowRotate;
+    $('auto-orient').checked = s.autoOrient;
     $('printer').value = s.printerId;
     $('printer-custom').hidden = s.printerId !== 'custom';
     $('printer-edge').value = s.printerEdge;
@@ -2105,11 +2167,20 @@
     document.querySelectorAll('[data-fit]').forEach((b) =>
       b.addEventListener('click', () => {
         state.settings.fit = b.dataset.fit;
+        // From here on this is the user's choice, not a default to migrate.
+        state.settings.fitChosen = true;
         App.clearSlotCache();
         saveSettings();
         refresh();
       })
     );
+
+    $('auto-orient').addEventListener('change', (e) => {
+      state.settings.autoOrient = e.target.checked;
+      App.clearSlotCache();
+      saveSettings();
+      refresh();
+    });
 
     $('dpi').addEventListener('change', (e) => {
       state.settings.dpi = parseInt(e.target.value, 10);

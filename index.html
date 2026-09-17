@@ -201,10 +201,20 @@
       <select id="dpi"></select>
     </label>
 
-    <div class="seg" role="group" aria-label="How photos fill their slot">
-      <button class="seg-btn is-active" data-fit="cover" type="button">Fill &amp; crop</button>
-      <button class="seg-btn" data-fit="contain" type="button">Fit whole photo</button>
+    <div class="field">
+      <span class="field-label">Cropping</span>
+      <div class="seg seg-3" role="group" aria-label="How photos fill their slot">
+        <button class="seg-btn is-active" data-fit="whole" type="button"
+                title="No cropping. The print is trimmed to the photo's own shape.">Whole photo</button>
+        <button class="seg-btn" data-fit="cover" type="button"
+                title="Crops the photo to fill the exact print size.">Fill &amp; crop</button>
+        <button class="seg-btn" data-fit="contain" type="button"
+                title="Keeps the exact print size and adds white margins.">Exact size</button>
+      </div>
     </div>
+
+    <label class="check"><input id="auto-orient" type="checkbox" checked>
+      <span>Turn the print to match the photo</span></label>
 
     <div class="field-row">
       <label class="field"><span class="field-label">White border (mm)</span>
