@@ -26,7 +26,10 @@ sheet* and it works out the largest size that fits the number you want per page.
 
 - **One size** — one photo at one size, any number of copies, in the densest
   grid that fits. A4 holds 30 passport photos with a 5 mm margin and 2 mm gaps.
-  Switch to "Every photo, own sheets" to do a whole batch at once.
+  *All photos, shared sheets* runs a whole batch at that size and fills each
+  sheet right up before starting another — three photos at four copies each is
+  one sheet, not three. *Every photo, own sheets* keeps them separate when that
+  is what you want.
 - **Mixed sizes** — every photo can carry *several* sizes at once. One 4R plus
   eight passport plus six stamp of the same face is a single job, not three.
   Sheets are then packed to use the fewest pages.
@@ -45,13 +48,14 @@ one click. `Ctrl+Z` undoes removals, reordering and edits.
 
 ## The parts that matter for printing
 
-**It does not crop unless you ask it to.** The print is trimmed to the photo's
-own shape, so nothing is cut off and no white padding is added either — a 4:3
-photo at 4R prints 135 × 102 mm rather than losing its top and bottom or
-floating in a white band. The print also turns to match the photo, so a portrait
-picture never lands in a landscape frame and lose its sides. Two other modes are
-there when you want them: *Fill & crop* for an exact size with the overflow cut
-away, and *Exact size* to keep the stated dimensions and add white margins.
+**Every print the same size, and nothing cropped.** That is the default. A 3:2
+and a 4:3 photo both come out at the full 4R, and neither loses an edge — the
+odd one sits inside its frame with a white margin. The print also turns to match
+the photo, so a portrait picture never lands in a landscape frame and lose its
+sides. Two other modes are a click away: *Fill & crop* for an exact size with
+the overflow cut off, and *Trim to photo*, which shrinks each print to its own
+photo's shape — no crop and no white edge, at the cost of prints coming out at
+different sizes.
 
 Identity sizes are the deliberate exception. A passport photo is 35 × 45 mm
 whatever shape the original is, so those keep their official size and are
@@ -111,11 +115,13 @@ detail rather than just stretching pixels. The model (~5 MB) downloads only when
 you first click the button. Without WebGL, or if the model can't load, it falls
 back to high-quality stepped resampling with a sharpening pass, and says so.
 
-**Cutting guides that don't land on the photo.** Corner marks sit out in the
-gutter, which is what you actually cut to; a dashed rectangle drawn on the trim
-line ends up printed on the picture. With no gutter to put them in, it falls
-back to shared hairlines automatically. An optional white border can be added
-inside each print.
+**Cutting guides, four ways.** *Corner marks* sit out in the gutter, so no line
+is printed on the picture itself — the tidiest option when there is a gap to put
+them in. *Dotted cut lines* draw a dashed rectangle round every print, which is
+the easier thing to follow with scissors. *Solid cut lines* do the same
+undashed, and *None* leaves the sheet clean. Corner marks fall back to dotted
+automatically when there is no gutter to sit in. An optional white border can be
+added inside each print.
 
 **It flags wide-gamut photos.** A Display P3 or Adobe RGB file is converted to
 sRGB the moment it is drawn, and saturated reds and greens shift. The embedded

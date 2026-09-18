@@ -20,7 +20,9 @@
       orientation: 'portrait',
       margin: 5,
       gap: 2,
-      fit: 'whole',        // never crop unless asked; see shapedSize()
+      // Every print the same size, and nothing cropped: the photo sits inside
+      // the chosen size. 'whole' trims each print to its own photo instead.
+      fit: 'contain',
       autoOrient: true,    // turn the print to match the photo
       fitChosen: false,    // true once the user picks a fit themselves
       cutMarks: 'ticks',
@@ -135,7 +137,7 @@
       Object.assign(state.settings, s);
       // Cropping should never be the default. Anyone still on the old
       // fill-and-crop setting who never picked it deliberately moves across.
-      if (!state.settings.fitChosen) state.settings.fit = 'whole';
+      if (!state.settings.fitChosen) state.settings.fit = 'contain';
       Object.assign(state.grid, raw.grid || {});
     } catch (e) {
       /* ignore corrupt settings */
@@ -281,6 +283,14 @@
       h = nh;
     }
     return { w, h };
+  }
+
+  /* An identity photo has to fill its official frame whatever the global
+     setting says — a passport photo with white bands down it is not a passport
+     photo, and the head-height guides assume the picture reaches the edges. */
+  function forcedFit(sizeId) {
+    const def = sizeId && sizeId !== 'custom' ? App.findSize(sizeId) : null;
+    return def && def.guide ? 'cover' : undefined;
   }
 
   function photoSizeRows(photo) {
@@ -540,6 +550,15 @@
     return state.grid.fill ? null : App.findSize(state.grid.sizeId);
   }
 
+  /* What will really happen to this photo, which is not always the global
+     setting: an identity size fills its frame whatever else is chosen. The
+     editor and the resolution badge have to agree with the print. */
+  function effectiveFit(photo) {
+    const def = targetSizeDef(photo);
+    if (def && def.guide) return 'cover';
+    return renderSettings().fit;
+  }
+
   /* ---------------------------------------------------------------- layout */
 
   function computeLayout() {
@@ -572,7 +591,15 @@
       const entries = [];
       for (const photo of state.photos) {
         for (const row of photoSizeRows(photo)) {
-          if (row.copies > 0) entries.push({ photoId: photo.id, w: row.w, h: row.h, copies: row.copies });
+          if (row.copies > 0) {
+            entries.push({
+              photoId: photo.id,
+              w: row.w,
+              h: row.h,
+              copies: row.copies,
+              fit: forcedFit(row.sizeId)
+            });
+          }
         }
       }
       if (!entries.length) return { paper, pages: [], perSheet: 0 };
@@ -586,6 +613,29 @@
     }
 
     const g = state.grid;
+
+    if (g.source === 'all') {
+      // Every photo at the same size, sheets filled right up before a new one
+      // is started. Giving each photo its own sheet leaves most of the paper
+      // empty when only a couple of copies are wanted.
+      const count = g.fill ? Math.max(1, g.fillCount) : Math.max(1, g.count);
+      const entries = state.photos.map((photo) =>
+        Object.assign(
+          { photoId: photo.id, copies: count, fit: forcedFit(g.sizeId) },
+          gridItemSize(paper, photo)
+        )
+      );
+      if (!entries.length) return { paper, pages: [], perSheet: 0 };
+      const res = App.layoutPack(Object.assign({ entries }, base));
+      return {
+        paper,
+        pages: res.pages,
+        perSheet: res.pages.length ? res.pages[0].items.length : 0,
+        oversized: res.oversized,
+        itemSize: gridItemSize(paper, state.photos[0])
+      };
+    }
+
     const targets = g.source === 'each' ? state.photos : [selectedPhoto()].filter(Boolean);
     if (!targets.length) return { paper, pages: [], perSheet: 0 };
 
@@ -595,7 +645,9 @@
     for (const photo of targets) {
       const item = gridItemSize(paper, photo);
       const count = g.fill ? Math.max(1, g.fillCount) : Math.max(1, g.count);
-      const res = App.layoutGrid(Object.assign({ item, count, photoId: photo.id }, base));
+      const res = App.layoutGrid(
+        Object.assign({ item, count, photoId: photo.id, slotFit: forcedFit(g.sizeId) }, base)
+      );
       if (res.error === 'too-big') {
         tooBig++;
         continue;
@@ -793,7 +845,9 @@
       const meta = document.createElement('div');
       meta.className = 'lib-meta';
       const target = targetSizeFor(photo);
-      const dpi = App.effectiveDpi(photo.w, photo.h, target.w, target.h, rs.fit) / Math.max(1, photo.zoom || 1);
+      const dpi =
+        App.effectiveDpi(photo.w, photo.h, target.w, target.h, effectiveFit(photo)) /
+        Math.max(1, photo.zoom || 1);
       const verdict = App.dpiVerdict(dpi);
 
       // A poor resolution badge is exactly the moment someone needs help, so
@@ -1192,6 +1246,9 @@
     if (!photo) return;
 
     const rs = renderSettings();
+    // The preview has to show what will print, and an identity size fills its
+    // frame whatever the global setting says.
+    rs.fit = effectiveFit(photo);
     const target = targetSizeFor(photo);
     const rot = (((photo.rotate || 0) % 360) + 360) % 360;
     const swapped = rot === 90 || rot === 270;

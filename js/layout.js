@@ -33,7 +33,7 @@
   };
 
   App.layoutGrid = function (opts) {
-    const { paper, margin, gap, item, count, allowRotate, photoId } = opts;
+    const { paper, margin, gap, item, count, allowRotate, photoId, slotFit } = opts;
     const fit = App.gridFit(paper, margin, gap, item, allowRotate);
     if (!fit) return { pages: [], perSheet: 0, error: 'too-big' };
 
@@ -54,7 +54,8 @@
             y: originY + r * (fit.h + gap),
             w: fit.w,
             h: fit.h,
-            rot: fit.rot
+            rot: fit.rot,
+            fit: slotFit
           });
           placed++;
         }
@@ -254,7 +255,8 @@
           y: margin + node.y,
           w: node.w - gap,
           h: node.h - gap,
-          rot: node.rot
+          rot: node.rot,
+          fit: it.fit
         });
       }
 
@@ -298,7 +300,7 @@
     const queue = [];
     for (const e of entries) {
       for (let i = 0; i < Math.max(1, e.copies || 1); i++) {
-        queue.push({ photoId: e.photoId, w: e.w, h: e.h });
+        queue.push({ photoId: e.photoId, w: e.w, h: e.h, fit: e.fit });
       }
     }
 
@@ -334,7 +336,11 @@
         // layoutGrid assumes a single photo; restore each slot's real owner.
         let k = 0;
         for (const page of g.pages) {
-          for (const it of page.items) it.photoId = fits[k++].photoId;
+          for (const it of page.items) {
+            const src = fits[k++];
+            it.photoId = src.photoId;
+            it.fit = src.fit;
+          }
         }
         best = g.pages;
         bestScore = scoreOf(g.pages);

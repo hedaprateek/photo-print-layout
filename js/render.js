@@ -132,13 +132,15 @@
   function markMode(settings) {
     const mode = settings.cutMarks || 'ticks';
     if (mode === 'none') return 'none';
-    if (mode === 'lines') return 'lines';
+    if (mode === 'lines' || mode === 'dotted') return mode;
+    // Corner ticks need a gutter to sit in. Without one, fall back to a dotted
+    // outline, which is still something to cut along.
     const gap = settings.gap || 0;
     const margin = settings.margin || 0;
-    if (gap <= 0) return 'lines'; // photos touch: no room for ticks
+    if (gap <= 0) return 'dotted';
     let space = gap / 2;
     if (margin > 0) space = Math.min(space, margin);
-    return space < 0.6 ? 'lines' : 'ticks';
+    return space < 0.6 ? 'dotted' : 'ticks';
   }
 
   function markGeometry(settings) {
@@ -161,7 +163,7 @@
       const x1 = item.x + item.w;
       const y1 = item.y + item.h + capH;
 
-      if (mode === 'lines') {
+      if (mode === 'lines' || mode === 'dotted') {
         d += 'M' + x0 + ' ' + y0 + 'H' + x1 + 'V' + y1 + 'H' + x0 + 'Z';
         continue;
       }
@@ -192,6 +194,7 @@
     path.setAttribute('fill', 'none');
     path.setAttribute('stroke', '#9a9a9a');
     path.setAttribute('stroke-width', '0.15'); // user units are mm here
+    if (markMode(settings) === 'dotted') path.setAttribute('stroke-dasharray', '1.4 1.1');
     svg.appendChild(path);
     return svg;
   }
@@ -274,7 +277,8 @@
         App.mmToPx(item.h, plan.dpi),
         renderOptions(photo, item, plan, settings)
       );
-      const blob = await App.canvasToBlob(canvas, 'image/jpeg', plan.dpi >= 600 ? 0.95 : 0.92);
+      // Print is unforgiving, so keep the encoding close to lossless.
+      const blob = await App.canvasToBlob(canvas, 'image/jpeg', plan.dpi >= 600 ? 0.97 : 0.95);
       slotCache.set(key, { url: URL.createObjectURL(blob) });
       canvas.width = 0; // free the backing store promptly
       await new Promise((r) => setTimeout(r, 0)); // let the UI breathe
@@ -484,7 +488,7 @@
             App.mmToPx(item.h, plan.dpi),
             renderOptions(photo, item, plan, settings)
           );
-          dataUrl = canvas.toDataURL('image/jpeg', plan.dpi >= 600 ? 0.95 : 0.92);
+          dataUrl = canvas.toDataURL('image/jpeg', plan.dpi >= 600 ? 0.97 : 0.95);
           canvas.width = 0;
           rendered.set(plan.key, dataUrl);
         }
@@ -517,6 +521,8 @@
     if (mode === 'none') return;
     doc.setDrawColor(150);
     doc.setLineWidth(0.12);
+    const dashed = mode === 'dotted' && typeof doc.setLineDashPattern === 'function';
+    if (dashed) doc.setLineDashPattern([1.4, 1.1], 0);
 
     for (const item of page.items) {
       const capH = settings.contactLabels && item.caption ? item.captionH || 0 : 0;
@@ -525,7 +531,7 @@
       const x1 = item.x + item.w;
       const y1 = item.y + item.h + capH;
 
-      if (mode === 'lines') {
+      if (mode === 'lines' || mode === 'dotted') {
         doc.rect(x0, y0, item.w, item.h + capH);
         continue;
       }
@@ -540,5 +546,7 @@
         doc.line(x, y, x, y + sy * L);
       }
     }
+    // Turn the dash off again, or every later line inherits it.
+    if (dashed) doc.setLineDashPattern([], 0);
   }
 })((window.App = window.App || {}));

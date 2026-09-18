@@ -96,6 +96,7 @@
         <span class="field-label">Which photos</span>
         <select id="grid-source">
           <option value="one">Selected photo only</option>
+          <option value="all">All photos, shared sheets</option>
           <option value="each">Every photo, own sheets</option>
         </select>
       </label>
@@ -204,12 +205,12 @@
     <div class="field">
       <span class="field-label">Cropping</span>
       <div class="seg seg-3" role="group" aria-label="How photos fill their slot">
-        <button class="seg-btn is-active" data-fit="whole" type="button"
-                title="No cropping. The print is trimmed to the photo's own shape.">Whole photo</button>
+        <button class="seg-btn is-active" data-fit="contain" type="button"
+                title="Every print comes out the same size and nothing is cropped. A photo of a different shape sits inside with a white edge.">Same size</button>
         <button class="seg-btn" data-fit="cover" type="button"
-                title="Crops the photo to fill the exact print size.">Fill &amp; crop</button>
-        <button class="seg-btn" data-fit="contain" type="button"
-                title="Keeps the exact print size and adds white margins.">Exact size</button>
+                title="Every print the same size, filled edge to edge. The overflow is cropped away.">Fill &amp; crop</button>
+        <button class="seg-btn" data-fit="whole" type="button"
+                title="Each print trimmed to its own photo's shape: no cropping and no white edge, but prints come out at different sizes.">Trim to photo</button>
       </div>
     </div>
 
@@ -222,7 +223,8 @@
       <label class="field"><span class="field-label">Cutting guides</span>
         <select id="cut-marks">
           <option value="ticks">Corner marks</option>
-          <option value="lines">Full outlines</option>
+          <option value="dotted">Dotted cut lines</option>
+          <option value="lines">Solid cut lines</option>
           <option value="none">None</option>
         </select></label>
     </div>
