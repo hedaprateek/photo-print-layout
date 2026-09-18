@@ -25,8 +25,14 @@
       // Every print the same size, and nothing cropped: the photo sits inside
       // the chosen size. 'whole' trims each print to its own photo instead.
       fit: 'contain',
-      autoOrient: true,    // turn the print to match the photo
-      fitChosen: false,    // true once the user picks a fit themselves
+      // Off by default. A size you typed is an instruction, not a suggestion —
+      // turning 50x70 into 70x50 because the photo is landscape is not ours to
+      // decide. Switch it on and it will fit the size to the photo instead.
+      autoOrient: false,
+      fitChosen: false,     // true once the user picks a fit themselves
+      orientChosen: false,  // true once the user decides about turning
+      zoom: 100,            // preview scale in per cent, or 'fit'
+      gridlines: false,
       cutMarks: 'ticks',
       dpi: 300,
       allowRotate: true,
@@ -140,6 +146,8 @@
       // Cropping should never be the default. Anyone still on the old
       // fill-and-crop setting who never picked it deliberately moves across.
       if (!state.settings.fitChosen) state.settings.fit = 'contain';
+      // Same reasoning: nobody asked for their typed size to be turned round.
+      if (!state.settings.orientChosen) state.settings.autoOrient = false;
       Object.assign(state.grid, raw.grid || {});
     } catch (e) {
       /* ignore corrupt settings */
@@ -711,12 +719,34 @@
     $('stat-sheets').textContent = layout.pages.length;
     $('stat-per').textContent = layout.perSheet || 0;
     $('stat-fill').textContent = Math.round(App.efficiency(layout.pages, paper) * 100) + '%';
-    $('stat-size').textContent =
-      state.settings.mode === 'pack'
-        ? 'mixed'
-        : layout.itemSize
-        ? App.fmtMm(layout.itemSize.w) + ' × ' + App.fmtMm(layout.itemSize.h)
-        : '—';
+    let sizeText = '—';
+    if (state.settings.mode === 'pack') sizeText = 'mixed';
+    else if (layout.itemSize) {
+      const box = layout.itemSize;
+      sizeText = App.fmtMm(box.w) + ' × ' + App.fmtMm(box.h);
+      // Say what the photo itself measures when it does not fill the box, so
+      // the difference is never a surprise once it is on paper.
+      const ref = selectedPhoto() || state.photos[0];
+      if (ref) {
+        const b = Math.max(0, Math.min(rs.borderMm || 0, (box.w - 1) / 2, (box.h - 1) / 2));
+        const innerW = box.w - b * 2;
+        const innerH = box.h - b * 2;
+        const rot = (((ref.rotate || 0) % 360) + 360) % 360;
+        const swapped = rot === 90 || rot === 270;
+        const geo = App.slotGeometry(
+          swapped ? ref.h : ref.w,
+          swapped ? ref.w : ref.h,
+          innerW,
+          innerH,
+          effectiveFit(ref),
+          ref.zoom
+        );
+        if (geo.drawW < innerW - 0.5 || geo.drawH < innerH - 0.5) {
+          sizeText += '  ·  photo ' + App.fmtMm(geo.drawW) + ' × ' + App.fmtMm(geo.drawH);
+        }
+      }
+    }
+    $('stat-size').textContent = sizeText;
 
     const messages = [];
     let isError = false;
@@ -799,6 +829,7 @@
       const wrap = document.createElement('div');
       wrap.className = 'sheet-wrap';
       const sheetEl = App.buildSheet(page, paper, byId, rs, previewSrc);
+      if (state.settings.gridlines) sheetEl.appendChild(buildGrid(paper));
       if (layout.manual) {
         sheetEl.classList.add('is-manual');
         wireFreeSheet(sheetEl, i);
@@ -812,17 +843,64 @@
     scalePreview(paper);
   }
 
-  /* Sheets are built at true size, then scaled down to fit the viewport. */
+  /* A 10 mm grid over the sheet, every 50 mm drawn stronger. Screen only —
+     the print path builds its own sheets and never sees this. */
+  function buildGrid(paper) {
+    const NS = 'http://www.w3.org/2000/svg';
+    const svg = document.createElementNS(NS, 'svg');
+    svg.setAttribute('class', 'grid-lines');
+    svg.setAttribute('viewBox', '0 0 ' + paper.w + ' ' + paper.h);
+    svg.setAttribute('preserveAspectRatio', 'none');
+
+    let fine = '';
+    let bold = '';
+    for (let x = 0; x <= paper.w; x += 10) {
+      const line = 'M' + x + ' 0V' + paper.h;
+      if (x % 50 === 0) bold += line;
+      else fine += line;
+    }
+    for (let y = 0; y <= paper.h; y += 10) {
+      const line = 'M0 ' + y + 'H' + paper.w;
+      if (y % 50 === 0) bold += line;
+      else fine += line;
+    }
+
+    const stroke = (d, colour, width) => {
+      if (!d) return;
+      const p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', d);
+      p.setAttribute('fill', 'none');
+      p.setAttribute('stroke', colour);
+      p.setAttribute('stroke-width', width);
+      svg.appendChild(p);
+    };
+    stroke(fine, 'rgba(60,110,210,.30)', '0.12');
+    stroke(bold, 'rgba(60,110,210,.60)', '0.25');
+    return svg;
+  }
+
+  /* Sheets are built at true size; this applies the chosen preview zoom. */
   function scalePreview(paper) {
     const host = $('preview');
     const p = paper || lastLayout.paper;
     const pxW = p.w * App.MM_TO_CSSPX;
     const pxH = p.h * App.MM_TO_CSSPX;
-    const availW = Math.max(120, host.clientWidth - 44);
-    const availH = Math.max(200, window.innerHeight * 0.74);
-    const k = Math.min(1, availW / pxW, availH / pxH);
+    let k;
+    if (state.settings.zoom === 'fit') {
+      const availW = Math.max(120, host.clientWidth - 44);
+      const availH = Math.max(200, window.innerHeight * 0.74);
+      k = Math.min(1, availW / pxW, availH / pxH);
+    } else {
+      // A number means exactly that — 100% is the sheet at its real size.
+      k = clamp(Number(state.settings.zoom) || 100, 10, 400) / 100;
+    }
 
     previewScale = k;
+    const readout = $('zoom-level');
+    if (readout) {
+      readout.textContent =
+        Math.round(k * 100) + '%' + (state.settings.zoom === 'fit' ? ' (fit)' : '');
+    }
 
     host.querySelectorAll('.sheet-wrap').forEach((wrap) => {
       wrap.style.width = pxW * k + 'px';
@@ -1461,6 +1539,7 @@
     $('cut-marks').value = s.cutMarks;
     $('allow-rotate').checked = s.allowRotate;
     $('auto-orient').checked = s.autoOrient;
+    $('chk-gridlines').checked = s.gridlines;
     $('printer').value = s.printerId;
     $('printer-custom').hidden = s.printerId !== 'custom';
     $('printer-edge').value = s.printerEdge;
@@ -2563,6 +2642,7 @@
 
     $('auto-orient').addEventListener('change', (e) => {
       state.settings.autoOrient = e.target.checked;
+      state.settings.orientChosen = true; // their call from here on
       App.clearSlotCache();
       saveSettings();
       refresh();
@@ -2585,6 +2665,30 @@
     });
     $('allow-rotate').addEventListener('change', (e) => {
       state.settings.allowRotate = e.target.checked;
+      saveSettings();
+      refresh();
+    });
+
+    /* preview zoom and gridlines */
+    const setZoom = (z) => {
+      state.settings.zoom = z;
+      saveSettings();
+      scalePreview();
+    };
+    const stepZoom = (delta) => {
+      const current =
+        state.settings.zoom === 'fit'
+          ? Math.round(previewScale * 100)
+          : Number(state.settings.zoom) || 100;
+      setZoom(clamp(Math.round(current + delta), 10, 400));
+    };
+    $('btn-zoom-in').addEventListener('click', () => stepZoom(10));
+    $('btn-zoom-out').addEventListener('click', () => stepZoom(-10));
+    $('btn-zoom-100').addEventListener('click', () => setZoom(100));
+    $('btn-zoom-fit').addEventListener('click', () => setZoom('fit'));
+
+    $('chk-gridlines').addEventListener('change', (e) => {
+      state.settings.gridlines = e.target.checked;
       saveSettings();
       refresh();
     });

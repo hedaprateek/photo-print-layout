@@ -50,6 +50,13 @@ other's edges, so arranging by hand still comes out square instead of undoing
 the packing. *Back to automatic* returns to the packed layout, and undo brings
 your arrangement back if you change your mind.
 
+**The preview is at a scale you set.** It opens at *Actual size* — 100%, the
+sheet at its real dimensions on screen — and says so. *Fit* shrinks it to the
+window and labels itself "(fit)" so you always know what you are looking at, and
+the − / + buttons step between 10% and 400%. **Gridlines** puts a 10 mm grid over
+the sheet, heavier every 50 mm, for judging alignment by eye. It is drawn on
+screen only and never reaches the paper.
+
 **Then print or save a PDF** at 150, 300 or 600 DPI.
 
 Save any combination as a named setup ("8 passport on A4") and pull it back in
@@ -57,14 +64,19 @@ one click. `Ctrl+Z` undoes removals, reordering and edits.
 
 ## The parts that matter for printing
 
-**Every print the same size, and nothing cropped.** That is the default. A 3:2
-and a 4:3 photo both come out at the full 4R, and neither loses an edge — the
-odd one sits inside its frame with a white margin. The print also turns to match
-the photo, so a portrait picture never lands in a landscape frame and lose its
-sides. Two other modes are a click away: *Fill & crop* for an exact size with
-the overflow cut off, and *Trim to photo*, which shrinks each print to its own
-photo's shape — no crop and no white edge, at the cost of prints coming out at
-different sizes.
+**The size you ask for is the size you get.** Type 50 × 70 and every print is
+50 × 70, whatever shape the photo is — nothing is turned round, resized or
+cropped behind your back. A photo that does not match sits inside its frame with
+a white margin, and the read-out tells you what the photo itself measures so the
+difference is never a surprise. Two other modes are a click away: *Fill & crop*
+keeps the size and cuts the overflow away, so the photo really is 50 × 70; and
+*Trim to photo* shrinks each print to its own photo's shape — no crop and no
+white edge, at the cost of prints coming out at different sizes.
+
+*Turn the print to match the photo* is a switch, off by default. On, a landscape
+photo at 4R prints 152 × 102 instead of 102 × 152, which is usually what you want
+for a mixed batch — but it changes the size you typed, so it only happens if you
+ask.
 
 Identity sizes are the deliberate exception. A passport photo is 35 × 45 mm
 whatever shape the original is, so those keep their official size and are

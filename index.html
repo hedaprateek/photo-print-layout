@@ -66,6 +66,19 @@
 
     <div id="notice" class="notice" hidden></div>
 
+    <div class="preview-bar">
+      <span class="pb-label">Preview</span>
+      <div class="zoom">
+        <button id="btn-zoom-out" class="chip" type="button" aria-label="Zoom out">−</button>
+        <span id="zoom-level" class="zoom-level">100%</span>
+        <button id="btn-zoom-in" class="chip" type="button" aria-label="Zoom in">+</button>
+        <button id="btn-zoom-100" class="chip" type="button" title="Show the sheet at its real size on screen">Actual size</button>
+        <button id="btn-zoom-fit" class="chip" type="button" title="Shrink the sheet to fit the window">Fit</button>
+      </div>
+      <label class="check"><input id="chk-gridlines" type="checkbox">
+        <span>Gridlines <span class="hint">10 mm, on screen only</span></span></label>
+    </div>
+
     <div id="preview" class="preview">
       <div class="empty-state">
         <h3>Add photos to begin</h3>
