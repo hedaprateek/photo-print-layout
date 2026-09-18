@@ -327,7 +327,54 @@ select { cursor: pointer; }
 .empty-state p { margin: 0; font-size: 13px; }
 
 .sheet-block { display: flex; flex-direction: column; align-items: center; gap: 7px; }
-.sheet-label { font-size: 11px; color: var(--text-faint); letter-spacing: .04em; }
+.sheet-label {
+  display: flex; align-items: center; gap: 14px;
+  font-size: 11px; color: var(--text-faint); letter-spacing: .04em;
+}
+
+/* ------------------------------------------------------- free placement */
+
+/* Handles live inside a sheet that is scaled down to fit the screen, so every
+   size is divided by that scale (--inv) to keep them a usable size. */
+.sheet.is-manual .slot.is-movable { cursor: move; }
+
+.sheet.is-manual .slot.is-picked {
+  outline: calc(0.5mm * var(--inv, 1)) solid var(--accent);
+  outline-offset: 0;
+}
+
+.item-tools {
+  position: absolute; left: 50%; top: 0;
+  transform: translate(-50%, -115%);
+  display: flex; gap: calc(0.7mm * var(--inv, 1));
+  white-space: nowrap; z-index: 2;
+}
+
+.item-tool {
+  font-family: inherit;
+  font-size: calc(3.2mm * var(--inv, 1));
+  line-height: 1;
+  padding: calc(0.9mm * var(--inv, 1)) calc(1.5mm * var(--inv, 1));
+  border: 0;
+  border-radius: calc(1mm * var(--inv, 1));
+  background: var(--accent);
+  color: #0c1020;
+  cursor: pointer;
+}
+.item-tool:hover { background: #7f9bff; }
+
+.item-grip {
+  position: absolute;
+  right: calc(-1.7mm * var(--inv, 1));
+  bottom: calc(-1.7mm * var(--inv, 1));
+  width: calc(3.4mm * var(--inv, 1));
+  height: calc(3.4mm * var(--inv, 1));
+  background: var(--accent);
+  border: calc(0.4mm * var(--inv, 1)) solid #fff;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  z-index: 2;
+}
 .sheet-wrap { position: relative; }
 
 /* Sheets are laid out in real millimetres; the preview only scales them. */

@@ -13,6 +13,8 @@
   const state = {
     photos: [],
     selectedId: null,
+    manual: null,   // { pages } once the sheets are arranged by hand
+    selected: null, // { page, index } of the print being edited
     settings: {
       paperId: 'a4',
       paperW: 210,
@@ -563,6 +565,17 @@
 
   function computeLayout() {
     const paper = currentPaper();
+
+    // Once the sheets are arranged by hand the packer stops touching them.
+    if (state.manual) {
+      return {
+        paper,
+        pages: state.manual.pages,
+        perSheet: state.manual.pages.length ? state.manual.pages[0].items.length : 0,
+        manual: true
+      };
+    }
+
     const s = state.settings;
     const margin = clamp(s.margin, 0, Math.min(paper.w, paper.h) / 2 - 1);
     const gap = Math.max(0, s.gap);
@@ -684,6 +697,7 @@
   /* --------------------------------------------------------------- preview */
 
   let lastLayout = { paper: currentPaper(), pages: [] };
+  let previewScale = 1; // how far the sheets are shrunk to fit the screen
 
   function refresh() {
     renderLibrary();
@@ -770,13 +784,26 @@
 
       const label = document.createElement('div');
       label.className = 'sheet-label';
-      label.textContent =
+      const caption = document.createElement('span');
+      caption.textContent =
         'Sheet ' + (i + 1) + ' of ' + layout.pages.length + ' · ' + paper.name + ' ' +
         App.fmtMm(paper.w) + ' × ' + App.fmtMm(paper.h) + ' · ' + page.items.length + ' photos';
 
+      const modeBtn = document.createElement('button');
+      modeBtn.type = 'button';
+      modeBtn.className = 'link-btn';
+      modeBtn.textContent = layout.manual ? 'Back to automatic' : 'Arrange by hand';
+      modeBtn.addEventListener('click', () => (layout.manual ? exitFreeMode() : enterFreeMode()));
+      label.append(caption, modeBtn);
+
       const wrap = document.createElement('div');
       wrap.className = 'sheet-wrap';
-      wrap.appendChild(App.buildSheet(page, paper, byId, rs, previewSrc));
+      const sheetEl = App.buildSheet(page, paper, byId, rs, previewSrc);
+      if (layout.manual) {
+        sheetEl.classList.add('is-manual');
+        wireFreeSheet(sheetEl, i);
+      }
+      wrap.appendChild(sheetEl);
 
       block.append(label, wrap);
       host.appendChild(block);
@@ -795,12 +822,314 @@
     const availH = Math.max(200, window.innerHeight * 0.74);
     const k = Math.min(1, availW / pxW, availH / pxH);
 
+    previewScale = k;
+
     host.querySelectorAll('.sheet-wrap').forEach((wrap) => {
       wrap.style.width = pxW * k + 'px';
       wrap.style.height = pxH * k + 'px';
       const sheet = wrap.firstElementChild;
-      if (sheet) sheet.style.transform = 'scale(' + k + ')';
+      if (sheet) {
+        sheet.style.transform = 'scale(' + k + ')';
+        // Handles live inside the scaled sheet and are sized in millimetres,
+        // so undo the scale on them or they shrink away on a small preview.
+        sheet.style.setProperty('--inv', 1 / k);
+      }
     });
+  }
+
+  /* -------------------------------------------------------- free placement */
+
+  /* Turning this on freezes the current arrangement: the packer stops
+     rearranging, and every print can be moved, resized, turned or taken off by
+     hand. Prints snap to the margins and to each other's edges, so arranging by
+     hand still comes out square rather than undoing the careful packing. */
+  function enterFreeMode() {
+    const layout = computeLayout();
+    if (!layout.pages.length) return;
+    state.manual = {
+      pages: layout.pages.map((p) => ({ items: p.items.map((it) => Object.assign({}, it)) }))
+    };
+    state.selected = null;
+    pushUndo('arranging the sheets by hand', () => {
+      state.manual = null;
+      state.selected = null;
+    });
+    App.clearSlotCache();
+    refresh();
+    notice(
+      'Arranging by hand. Drag a print to move it, pull the corner to resize, and use ' +
+      'the buttons above it to turn, copy or remove. Arrow keys nudge. The layout ' +
+      'settings no longer rearrange these sheets.'
+    );
+  }
+
+  function exitFreeMode() {
+    const snapshot = state.manual;
+    state.manual = null;
+    state.selected = null;
+    pushUndo('going back to the automatic layout', () => {
+      state.manual = snapshot;
+    });
+    App.clearSlotCache();
+    refresh();
+  }
+
+  const manualItem = (pageIndex, index) => {
+    const page = state.manual && state.manual.pages[pageIndex];
+    return page ? page.items[index] : null;
+  };
+
+  const manualSnapshot = () => JSON.parse(JSON.stringify(state.manual.pages));
+
+  function pushManualUndo(label, before) {
+    pushUndo(label, () => {
+      if (state.manual) state.manual.pages = before;
+      state.selected = null;
+    });
+  }
+
+  function slotEl(pageIndex, index) {
+    const sheet = $('preview').querySelectorAll('.sheet')[pageIndex];
+    return sheet ? sheet.querySelectorAll('.slot')[index] : null;
+  }
+
+  /* Screen pixels to millimetres, given how far the preview is shrunk. */
+  const pxToMm = (px) => px / (previewScale * App.MM_TO_CSSPX);
+
+  function keepOnSheet(it, paper) {
+    it.x = clamp(it.x, 0, Math.max(0, paper.w - it.w));
+    it.y = clamp(it.y, 0, Math.max(0, paper.h - it.h));
+  }
+
+  /* Snap to the page margins, the centre, and the edges of the other prints. */
+  function snapPosition(pageIndex, index, x, y, it, paper) {
+    const tol = 2;
+    const m = state.settings.margin;
+    const gap = state.settings.gap;
+    const xs = [m, paper.w - m - it.w, (paper.w - it.w) / 2];
+    const ys = [m, paper.h - m - it.h, (paper.h - it.h) / 2];
+
+    state.manual.pages[pageIndex].items.forEach((other, j) => {
+      if (j === index) return;
+      xs.push(other.x, other.x + other.w - it.w, other.x + other.w + gap, other.x - it.w - gap);
+      ys.push(other.y, other.y + other.h - it.h, other.y + other.h + gap, other.y - it.h - gap);
+    });
+
+    const best = (v, candidates) => {
+      let out = v;
+      let closest = tol;
+      for (const c of candidates) {
+        const d = Math.abs(v - c);
+        if (d < closest) {
+          closest = d;
+          out = c;
+        }
+      }
+      return out;
+    };
+
+    return {
+      x: clamp(best(x, xs), 0, Math.max(0, paper.w - it.w)),
+      y: clamp(best(y, ys), 0, Math.max(0, paper.h - it.h))
+    };
+  }
+
+  function wireFreeSheet(sheetEl, pageIndex) {
+    sheetEl.querySelectorAll('.slot').forEach((slot, index) => {
+      slot.classList.add('is-movable');
+      const picked =
+        state.selected && state.selected.page === pageIndex && state.selected.index === index;
+      if (picked) {
+        slot.classList.add('is-picked');
+        slot.appendChild(buildItemHandles(pageIndex, index));
+      }
+      slot.addEventListener('pointerdown', (e) => startItemDrag(e, pageIndex, index));
+    });
+
+    sheetEl.addEventListener('pointerdown', (e) => {
+      if (e.target === sheetEl && state.selected) {
+        state.selected = null;
+        refresh();
+      }
+    });
+  }
+
+  function buildItemHandles(pageIndex, index) {
+    const frag = document.createDocumentFragment();
+
+    const bar = document.createElement('div');
+    bar.className = 'item-tools';
+    const tool = (glyph, title, fn) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'item-tool';
+      b.title = title;
+      b.textContent = glyph;
+      b.addEventListener('pointerdown', (e) => e.stopPropagation());
+      b.addEventListener('click', (e) => {
+        e.stopPropagation();
+        fn();
+      });
+      return b;
+    };
+    bar.append(
+      tool('↻', 'Turn 90°', () => rotateItem(pageIndex, index)),
+      tool('⧉', 'Another copy', () => duplicateItem(pageIndex, index)),
+      tool('×', 'Take off the sheet', () => deleteItem(pageIndex, index))
+    );
+    frag.appendChild(bar);
+
+    const grip = document.createElement('div');
+    grip.className = 'item-grip';
+    grip.title = 'Drag to resize';
+    grip.addEventListener('pointerdown', (e) => startItemResize(e, pageIndex, index));
+    frag.appendChild(grip);
+    return frag;
+  }
+
+  function startItemDrag(e, pageIndex, index) {
+    if (e.target.closest('.item-tools') || e.target.closest('.item-grip')) return;
+    const it = manualItem(pageIndex, index);
+    if (!it) return;
+    e.preventDefault();
+
+    const already =
+      state.selected && state.selected.page === pageIndex && state.selected.index === index;
+    state.selected = { page: pageIndex, index };
+    if (!already) refresh(); // draw the handles before the drag begins
+
+    const el = slotEl(pageIndex, index);
+    const paper = currentPaper();
+    const before = manualSnapshot();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const fromX = it.x;
+    const fromY = it.y;
+    let moved = false;
+
+    const onMove = (ev) => {
+      const at = snapPosition(
+        pageIndex,
+        index,
+        fromX + pxToMm(ev.clientX - startX),
+        fromY + pxToMm(ev.clientY - startY),
+        it,
+        paper
+      );
+      it.x = at.x;
+      it.y = at.y;
+      if (el) {
+        el.style.left = it.x + 'mm';
+        el.style.top = it.y + 'mm';
+      }
+      moved = true;
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (moved) {
+        pushManualUndo('moving a print', before);
+        App.clearSlotCache();
+        refresh();
+      }
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function startItemResize(e, pageIndex, index) {
+    const it = manualItem(pageIndex, index);
+    if (!it) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    const el = slotEl(pageIndex, index);
+    const paper = currentPaper();
+    const before = manualSnapshot();
+    const startX = e.clientX;
+    const fromW = it.w;
+    const fromH = it.h;
+    const ratio = fromW / fromH;
+
+    const onMove = (ev) => {
+      let w = Math.max(10, fromW + pxToMm(ev.clientX - startX));
+      let h = w / ratio;
+      if (it.x + w > paper.w) {
+        w = paper.w - it.x;
+        h = w / ratio;
+      }
+      if (it.y + h > paper.h) {
+        h = paper.h - it.y;
+        w = h * ratio;
+      }
+      it.w = w;
+      it.h = h;
+      // The shape is locked, so a plain scale is an honest live preview; the
+      // real re-render happens when the drag ends.
+      if (el) {
+        el.style.transformOrigin = 'top left';
+        el.style.transform = 'scale(' + w / fromW + ')';
+      }
+    };
+    const onUp = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onUp);
+      if (el) el.style.transform = '';
+      pushManualUndo('resizing a print', before);
+      App.clearSlotCache();
+      refresh();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onUp);
+  }
+
+  function rotateItem(pageIndex, index) {
+    const it = manualItem(pageIndex, index);
+    if (!it) return;
+    const before = manualSnapshot();
+    const w = it.w;
+    it.w = it.h;
+    it.h = w;
+    it.rot = !it.rot;
+    keepOnSheet(it, currentPaper());
+    pushManualUndo('turning a print', before);
+    App.clearSlotCache();
+    refresh();
+  }
+
+  function duplicateItem(pageIndex, index) {
+    const it = manualItem(pageIndex, index);
+    if (!it) return;
+    const before = manualSnapshot();
+    const copy = Object.assign({}, it);
+    copy.x += state.settings.gap + 2;
+    copy.y += state.settings.gap + 2;
+    keepOnSheet(copy, currentPaper());
+    state.manual.pages[pageIndex].items.splice(index + 1, 0, copy);
+    state.selected = { page: pageIndex, index: index + 1 };
+    pushManualUndo('adding another copy', before);
+    refresh();
+  }
+
+  function deleteItem(pageIndex, index) {
+    if (!manualItem(pageIndex, index)) return;
+    const before = manualSnapshot();
+    state.manual.pages[pageIndex].items.splice(index, 1);
+    state.selected = null;
+    pushManualUndo('taking a print off the sheet', before);
+    App.clearSlotCache();
+    refresh();
+  }
+
+  function nudgeSelected(dx, dy) {
+    const it = manualItem(state.selected.page, state.selected.index);
+    if (!it) return;
+    const before = manualSnapshot();
+    it.x += dx;
+    it.y += dy;
+    keepOnSheet(it, currentPaper());
+    pushManualUndo('moving a print', before);
+    refresh();
   }
 
   /* --------------------------------------------------------------- library */
@@ -2456,6 +2785,27 @@
 
     /* keyboard */
     document.addEventListener('keydown', (e) => {
+      // Arranging by hand: arrows nudge the chosen print, Delete takes it off.
+      if (state.manual && state.selected && !isTyping(document.activeElement) && !openModalEl()) {
+        const step = e.shiftKey ? 5 : 1;
+        const moves = {
+          ArrowLeft: [-step, 0],
+          ArrowRight: [step, 0],
+          ArrowUp: [0, -step],
+          ArrowDown: [0, step]
+        };
+        if (moves[e.key]) {
+          e.preventDefault();
+          nudgeSelected(moves[e.key][0], moves[e.key][1]);
+          return;
+        }
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+          e.preventDefault();
+          deleteItem(state.selected.page, state.selected.index);
+          return;
+        }
+      }
+
       const meta = e.ctrlKey || e.metaKey;
       if (!meta) return;
       const key = e.key.toLowerCase();

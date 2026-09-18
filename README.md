@@ -41,6 +41,15 @@ actually come here to do — 8 passport, a full sheet of passport photos, 16 sta
 2 × 4R, a full-page print, one sheet each, or a contact sheet. Each sets the
 paper, size, margins and count in one go, and can be undone.
 
+**Or arrange the sheet yourself.** Every sheet has an *Arrange by hand* switch.
+Turn it on and the packer stops rearranging: drag any print where you want it,
+pull its corner to resize, and use the buttons above it to turn it 90°, add
+another copy, or take it off the sheet. Arrow keys nudge, Shift+arrow nudges
+further, Delete removes. Prints snap to the page margins, the centre and each
+other's edges, so arranging by hand still comes out square instead of undoing
+the packing. *Back to automatic* returns to the packed layout, and undo brings
+your arrangement back if you change your mind.
+
 **Then print or save a PDF** at 150, 300 or 600 DPI.
 
 Save any combination as a named setup ("8 passport on A4") and pull it back in
