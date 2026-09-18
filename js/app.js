@@ -5,7 +5,6 @@
   const SETTINGS_KEY = 'ppl.settings';
   const PRESETS_KEY = 'ppl.presets';
   const PREVIEW_SHEET_LIMIT = 15;
-  const CONTACT_CAPTION_MM = 6;
 
   const $ = (id) => document.getElementById(id);
   const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
@@ -36,16 +35,15 @@
       cutMarks: 'ticks',
       dpi: 300,
       allowRotate: true,
-      mode: 'grid',
       persist: true,
       borderMm: 0,
       printerId: 'inkjet',
       printerEdge: 3.5,
-      contactCols: 4,
-      contactLabels: true
+      perPhotoSizes: false, // let each photo carry its own size
+      showSizes: false      // measurements over each print in the preview
     },
     grid: {
-      source: 'one',
+      source: 'all',
       sizeId: 'id_35x45',
       customW: 60,
       customH: 80,
@@ -509,40 +507,27 @@
     return shapedSize({ w: s.w, h: s.h }, ref, g.sizeId);
   }
 
-  function contactCellSize(paper) {
-    const s = state.settings;
-    const cols = clamp(s.contactCols, 1, 12);
-    const usableW = paper.w - s.margin * 2;
-    const cellW = (usableW - (cols - 1) * s.gap) / cols;
-    return { w: Math.max(1, cellW), h: Math.max(1, cellW) };
-  }
-
-  /* Settings as the renderer should see them for the current mode. */
+  /* Settings as the renderer should see them. */
   function renderSettings() {
     const s = Object.assign({}, state.settings);
-    if (s.mode === 'contact') {
-      s.fit = 'contain'; // a contact sheet must never crop
-      s.borderMm = 0;
-    } else {
-      s.contactLabels = false;
-      // The slot was already trimmed to the photo's shape, so filling it crops
-      // nothing. Identity sizes kept their official shape, and those do crop.
-      if (s.fit === 'whole') s.fit = 'cover';
-    }
+    s.contactLabels = false;
+    // The slot was already trimmed to the photo's shape, so filling it crops
+    // nothing. Identity sizes kept their official shape, and those do crop.
+    if (s.fit === 'whole') s.fit = 'cover';
     return s;
   }
 
   /* The size a photo's image area will occupy, border excluded — the only
      figure for which a DPI number is meaningful. */
   function targetSizeFor(photo) {
-    const s = state.settings;
     const paper = currentPaper();
     let box;
-    if (s.mode === 'contact') box = contactCellSize(paper);
-    else if (s.mode === 'pack') {
+    if (state.settings.perPhotoSizes) {
       const rows = photoSizeRows(photo);
       box = rows.length ? { w: rows[0].w, h: rows[0].h } : { w: 35, h: 45 };
-    } else box = gridItemSize(paper, photo);
+    } else {
+      box = gridItemSize(paper, photo);
+    }
 
     const rs = renderSettings();
     const b = Math.min(rs.borderMm || 0, (box.w - 1) / 2, (box.h - 1) / 2);
@@ -551,9 +536,7 @@
   }
 
   function targetSizeDef(photo) {
-    const s = state.settings;
-    if (s.mode === 'contact') return null;
-    if (s.mode === 'pack') {
+    if (state.settings.perPhotoSizes) {
       const rows = photo.sizes && photo.sizes.length ? photo.sizes : [defaultSizeRow()];
       return App.findSize(rows[0].sizeId);
     }
@@ -589,28 +572,17 @@
     const gap = Math.max(0, s.gap);
     const base = { paper, margin, gap, allowRotate: s.allowRotate };
 
-    if (!state.photos.length) return { paper, pages: [], perSheet: 0 };
+    const g = state.grid;
+    const photos = g.source === 'one' ? [selectedPhoto()].filter(Boolean) : state.photos;
+    if (!photos.length) return { paper, pages: [], perSheet: 0 };
 
-    if (s.mode === 'contact') {
-      const res = App.layoutContact({
-        paper,
-        margin,
-        gap,
-        photos: state.photos,
-        cols: clamp(s.contactCols, 1, 12),
-        captionMm: s.contactLabels ? CONTACT_CAPTION_MM : 0
-      });
-      return {
-        paper,
-        pages: res.pages,
-        perSheet: res.perSheet,
-        itemSize: contactCellSize(paper)
-      };
-    }
-
-    if (s.mode === 'pack') {
-      const entries = [];
-      for (const photo of state.photos) {
+    /* One arrangement, always: gather every print that has been asked for and
+       pack them into the fewest sheets. There is no second way to choose
+       between — "best use of the paper" is the only behaviour. */
+    const count = g.fill ? Math.max(1, g.fillCount) : Math.max(1, g.count);
+    const entries = [];
+    for (const photo of photos) {
+      if (s.perPhotoSizes) {
         for (const row of photoSizeRows(photo)) {
           if (row.copies > 0) {
             entries.push({
@@ -622,61 +594,27 @@
             });
           }
         }
+      } else {
+        const box = gridItemSize(paper, photo);
+        entries.push({
+          photoId: photo.id,
+          w: box.w,
+          h: box.h,
+          copies: count,
+          fit: forcedFit(g.sizeId)
+        });
       }
-      if (!entries.length) return { paper, pages: [], perSheet: 0 };
-      const res = App.layoutPack(Object.assign({ entries }, base));
-      return {
-        paper,
-        pages: res.pages,
-        perSheet: res.pages.length ? res.pages[0].items.length : 0,
-        oversized: res.oversized
-      };
     }
+    if (!entries.length) return { paper, pages: [], perSheet: 0 };
 
-    const g = state.grid;
-
-    if (g.source === 'all') {
-      // Every photo at the same size, sheets filled right up before a new one
-      // is started. Giving each photo its own sheet leaves most of the paper
-      // empty when only a couple of copies are wanted.
-      const count = g.fill ? Math.max(1, g.fillCount) : Math.max(1, g.count);
-      const entries = state.photos.map((photo) =>
-        Object.assign(
-          { photoId: photo.id, copies: count, fit: forcedFit(g.sizeId) },
-          gridItemSize(paper, photo)
-        )
-      );
-      if (!entries.length) return { paper, pages: [], perSheet: 0 };
-      const res = App.layoutPack(Object.assign({ entries }, base));
-      return {
-        paper,
-        pages: res.pages,
-        perSheet: res.pages.length ? res.pages[0].items.length : 0,
-        oversized: res.oversized,
-        itemSize: gridItemSize(paper, state.photos[0])
-      };
-    }
-
-    const targets = g.source === 'each' ? state.photos : [selectedPhoto()].filter(Boolean);
-    if (!targets.length) return { paper, pages: [], perSheet: 0 };
-
-    const pages = [];
-    let perSheet = 0;
-    let tooBig = 0;
-    for (const photo of targets) {
-      const item = gridItemSize(paper, photo);
-      const count = g.fill ? Math.max(1, g.fillCount) : Math.max(1, g.count);
-      const res = App.layoutGrid(
-        Object.assign({ item, count, photoId: photo.id, slotFit: forcedFit(g.sizeId) }, base)
-      );
-      if (res.error === 'too-big') {
-        tooBig++;
-        continue;
-      }
-      perSheet = res.perSheet;
-      pages.push(...res.pages);
-    }
-    return { paper, pages, perSheet, tooBig, itemSize: gridItemSize(paper, targets[0]) };
+    const res = App.layoutPack(Object.assign({ entries }, base));
+    return {
+      paper,
+      pages: res.pages,
+      perSheet: res.pages.length ? res.pages[0].items.length : 0,
+      oversized: res.oversized,
+      itemSize: gridItemSize(paper, photos[0])
+    };
   }
 
   /* How many photos stray into the band the printer physically cannot reach. */
@@ -720,7 +658,7 @@
     $('stat-per').textContent = layout.perSheet || 0;
     $('stat-fill').textContent = Math.round(App.efficiency(layout.pages, paper) * 100) + '%';
     let sizeText = '—';
-    if (state.settings.mode === 'pack') sizeText = 'mixed';
+    if (state.settings.perPhotoSizes) sizeText = 'mixed';
     else if (layout.itemSize) {
       const box = layout.itemSize;
       sizeText = App.fmtMm(box.w) + ' × ' + App.fmtMm(box.h);
@@ -829,6 +767,7 @@
       const wrap = document.createElement('div');
       wrap.className = 'sheet-wrap';
       const sheetEl = App.buildSheet(page, paper, byId, rs, previewSrc);
+      if (state.settings.showSizes) addSizeLabels(sheetEl, page);
       if (state.settings.gridlines) sheetEl.appendChild(buildGrid(paper));
       if (layout.manual) {
         sheetEl.classList.add('is-manual');
@@ -841,6 +780,23 @@
     });
 
     scalePreview(paper);
+  }
+
+  /* What each print measures, in both units people actually use. Screen only. */
+  function addSizeLabels(sheetEl, page) {
+    const slots = sheetEl.querySelectorAll('.slot');
+    const inch = (mm) => (mm / 25.4).toFixed(2);
+    const cm = (mm) => (mm / 10).toFixed(1);
+    page.items.forEach((item, i) => {
+      const slot = slots[i];
+      if (!slot) return;
+      const label = document.createElement('div');
+      label.className = 'slot-dim';
+      label.textContent =
+        inch(item.w) + ' × ' + inch(item.h) + ' in  ·  ' +
+        cm(item.w) + ' × ' + cm(item.h) + ' cm';
+      slot.appendChild(label);
+    });
   }
 
   /* A 10 mm grid over the sheet, every 50 mm drawn stronger. Screen only —
@@ -1291,7 +1247,7 @@
 
       body.append(name, meta);
 
-      if (state.settings.mode === 'pack') body.appendChild(buildSizeRows(photo));
+      if (state.settings.perPhotoSizes) body.appendChild(buildSizeRows(photo));
 
       const actions = document.createElement('div');
       actions.className = 'lib-actions';
@@ -1493,15 +1449,6 @@
     gridSizeSel.id = 'grid-size';
     $('grid-size').replaceWith(gridSizeSel);
 
-    const bulk = $('pack-bulk-size');
-    for (const s of App.SIZES) {
-      if (s.id === 'custom') continue;
-      const o = document.createElement('option');
-      o.value = s.id;
-      o.textContent = s.name;
-      bulk.appendChild(o);
-    }
-
     const dpiSel = $('dpi');
     for (const q of App.QUALITY) {
       const o = document.createElement('option');
@@ -1543,8 +1490,8 @@
     $('printer').value = s.printerId;
     $('printer-custom').hidden = s.printerId !== 'custom';
     $('printer-edge').value = s.printerEdge;
-    $('contact-cols').value = s.contactCols;
-    $('contact-labels').checked = s.contactLabels;
+    $('chk-per-photo').checked = s.perPhotoSizes;
+    $('chk-show-sizes').checked = s.showSizes;
 
     document.querySelectorAll('[data-orient]').forEach((b) =>
       b.classList.toggle('is-active', b.dataset.orient === s.orientation)
@@ -1552,16 +1499,6 @@
     document.querySelectorAll('[data-fit]').forEach((b) =>
       b.classList.toggle('is-active', b.dataset.fit === s.fit)
     );
-
-    const modes = { grid: 'tab-grid', pack: 'tab-pack', contact: 'tab-contact' };
-    for (const [mode, id] of Object.entries(modes)) {
-      const active = s.mode === mode;
-      $(id).classList.toggle('is-active', active);
-      $(id).setAttribute('aria-selected', String(active));
-    }
-    $('mode-grid').hidden = s.mode !== 'grid';
-    $('mode-pack').hidden = s.mode !== 'pack';
-    $('mode-contact').hidden = s.mode !== 'contact';
 
     $('grid-source').value = g.source;
     $('grid-size').value = g.fill ? '__fill' : g.sizeId;
@@ -2439,13 +2376,6 @@
     el.addEventListener('change', apply);
   }
 
-  function setMode(mode) {
-    state.settings.mode = mode;
-    App.clearSlotCache();
-    saveSettings();
-    refresh();
-  }
-
   function rotateEditing(delta) {
     const photo = editing && state.photos.find((p) => p.id === editing.id);
     if (!photo) return;
@@ -2528,11 +2458,7 @@
       doPrint(true);
     });
 
-    /* mode + layout controls */
-    $('tab-grid').addEventListener('click', () => setMode('grid'));
-    $('tab-pack').addEventListener('click', () => setMode('pack'));
-    $('tab-contact').addEventListener('click', () => setMode('contact'));
-
+    /* layout controls */
     $('grid-source').addEventListener('change', (e) => {
       state.grid.source = e.target.value;
       saveSettings();
@@ -2570,28 +2496,15 @@
       refresh();
     });
 
-    $('pack-bulk-size').addEventListener('change', (e) => {
-      if (!e.target.value) return;
-      const before = state.photos.map((p) => JSON.parse(JSON.stringify(p.sizes || [])));
-      state.photos.forEach((p) => {
-        p.sizes = [{ sizeId: e.target.value, customW: 60, customH: 80, copies: 1 }];
-        persistPhoto(p);
-      });
-      pushUndo('applying one size to all', () => {
-        state.photos.forEach((p, i) => {
-          if (before[i]) p.sizes = before[i];
-          persistPhoto(p);
-        });
-      });
-      e.target.value = '';
+    $('chk-per-photo').addEventListener('change', (e) => {
+      state.settings.perPhotoSizes = e.target.checked;
       App.clearSlotCache();
+      saveSettings();
       refresh();
     });
 
-    bindNumber('contact-cols', (v) => (state.settings.contactCols = Math.round(v)), 1, 12);
-    $('contact-labels').addEventListener('change', (e) => {
-      state.settings.contactLabels = e.target.checked;
-      App.clearSlotCache();
+    $('chk-show-sizes').addEventListener('change', (e) => {
+      state.settings.showSizes = e.target.checked;
       saveSettings();
       refresh();
     });

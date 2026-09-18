@@ -366,47 +366,6 @@
     return { pages: best || [], oversized };
   };
 
-  /* ---------------------------------------------------------- contact sheet */
-
-  /* A uniform grid of every photo with its filename underneath, for choosing
-     which ones to print. Square image cells, because a contact sheet is for
-     recognising pictures rather than reproducing them. */
-  App.layoutContact = function (opts) {
-    const { paper, margin, gap, photos, cols, captionMm } = opts;
-    const area = usable(paper, margin);
-    const c = Math.max(1, Math.min(12, cols || 4));
-
-    const cellW = (area.w - (c - 1) * gap) / c;
-    if (cellW <= 2) return { pages: [], perSheet: 0 };
-    const photoH = cellW;
-    const cellH = photoH + captionMm;
-    const rows = Math.floor((area.h + gap) / (cellH + gap));
-    if (rows < 1) return { pages: [], perSheet: 0 };
-
-    const pages = [];
-    let i = 0;
-    while (i < photos.length) {
-      const items = [];
-      for (let r = 0; r < rows && i < photos.length; r++) {
-        for (let k = 0; k < c && i < photos.length; k++) {
-          const photo = photos[i++];
-          items.push({
-            photoId: photo.id,
-            x: margin + k * (cellW + gap),
-            y: margin + r * (cellH + gap),
-            w: cellW,
-            h: photoH,
-            rot: false,
-            caption: photo.name,
-            captionH: captionMm
-          });
-        }
-      }
-      pages.push({ items });
-    }
-    return { pages, perSheet: c * rows, cols: c, rows };
-  };
-
   /* Share of the sheet covered by photos — the honest measure of how well the
      arrangement used the paper. */
   App.efficiency = function (pages, paper) {

@@ -77,6 +77,8 @@
       </div>
       <label class="check"><input id="chk-gridlines" type="checkbox">
         <span>Gridlines <span class="hint">10 mm, on screen only</span></span></label>
+      <label class="check"><input id="chk-show-sizes" type="checkbox">
+        <span>Sizes on each photo <span class="hint">inches and cm</span></span></label>
     </div>
 
     <div id="preview" class="preview">
@@ -97,20 +99,12 @@
       <div class="job-row" id="job-row"></div>
     </div>
 
-    <div class="tabs tabs-3" role="tablist" aria-label="Arrangement mode">
-      <button class="tab is-active" id="tab-grid" role="tab" aria-selected="true" type="button">One size</button>
-      <button class="tab" id="tab-pack" role="tab" aria-selected="false" type="button">Mixed sizes</button>
-      <button class="tab" id="tab-contact" role="tab" aria-selected="false" type="button">Contact sheet</button>
-    </div>
-
-    <!-- grid mode -->
-    <div id="mode-grid" class="mode-block">
+    <div class="mode-block">
       <label class="field">
         <span class="field-label">Which photos</span>
         <select id="grid-source">
-          <option value="one">Selected photo only</option>
-          <option value="all">All photos, shared sheets</option>
-          <option value="each">Every photo, own sheets</option>
+          <option value="all">All my photos</option>
+          <option value="one">Just the selected one</option>
         </select>
       </label>
 
@@ -132,7 +126,7 @@
       </label>
 
       <label class="field" id="grid-count-field">
-        <span class="field-label">How many copies</span>
+        <span class="field-label">Copies of each</span>
         <input id="grid-count" type="number" min="1" max="2000" step="1" value="8">
       </label>
       <div class="quick-row" id="grid-quick">
@@ -143,27 +137,12 @@
         <button class="chip" data-count="8" type="button">8</button>
         <button class="chip" data-count="fill" type="button">Fill sheet</button>
       </div>
-    </div>
 
-    <!-- pack mode -->
-    <div id="mode-pack" class="mode-block" hidden>
-      <p class="muted small">Each photo can carry several sizes at once — add rows in
-         the Photos list. Sheets are packed to use the least paper.</p>
-      <label class="field">
-        <span class="field-label">Apply one size to all</span>
-        <select id="pack-bulk-size"><option value="">Choose a size…</option></select>
-      </label>
-    </div>
+      <label class="check"><input id="chk-per-photo" type="checkbox">
+        <span>Give photos their own sizes <span class="hint">set each one in the Photos list</span></span></label>
 
-    <!-- contact sheet mode -->
-    <div id="mode-contact" class="mode-block" hidden>
-      <p class="muted small">Every photo as a labelled thumbnail, for choosing which
-         ones to print properly.</p>
-      <label class="field">
-        <span class="field-label">Columns</span>
-        <input id="contact-cols" type="number" min="1" max="12" step="1" value="4">
-      </label>
-      <label class="check"><input id="contact-labels" type="checkbox" checked><span>Print filenames</span></label>
+      <p class="muted small">However many photos and sizes there are, the sheets are
+         always packed to waste as little paper as possible.</p>
     </div>
 
     <hr class="rule">

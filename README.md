@@ -22,24 +22,20 @@ or a custom size in millimetres. Portrait or landscape.
 5R, 6R, 8R, squares, postcard, wallet, or a custom size. Or choose *Fill the
 sheet* and it works out the largest size that fits the number you want per page.
 
-**Three ways to arrange:**
+**There is one arrangement, and it is the tight one.** Say which photos, what
+size, and how many copies. Every print is then packed into the fewest sheets it
+will go into — there are no modes to pick between. Three photos at four copies
+each lands on one sheet, not three. A4 holds 30 passport photos with a 5 mm
+margin and 2 mm gaps.
 
-- **One size** — one photo at one size, any number of copies, in the densest
-  grid that fits. A4 holds 30 passport photos with a 5 mm margin and 2 mm gaps.
-  *All photos, shared sheets* runs a whole batch at that size and fills each
-  sheet right up before starting another — three photos at four copies each is
-  one sheet, not three. *Every photo, own sheets* keeps them separate when that
-  is what you want.
-- **Mixed sizes** — every photo can carry *several* sizes at once. One 4R plus
-  eight passport plus six stamp of the same face is a single job, not three.
-  Sheets are then packed to use the fewest pages.
-- **Contact sheet** — every photo as a labelled thumbnail, for choosing which
-  ones to print properly.
+If one photo needs a different size from the rest, tick *Give photos their own
+sizes* and set them individually in the Photos list. A 4R of one face plus eight
+passport of another is still a single job, packed together.
 
 **Or skip all of that.** *Quick start* has one-click recipes for the jobs people
 actually come here to do — 8 passport, a full sheet of passport photos, 16 stamp,
-2 × 4R, a full-page print, one sheet each, or a contact sheet. Each sets the
-paper, size, margins and count in one go, and can be undone.
+2 × 4R, a full-page print, or one 4R of everything. Each sets the paper, size,
+margins and count in one go, and can be undone.
 
 **Or arrange the sheet yourself.** Every sheet has an *Arrange by hand* switch.
 Turn it on and the packer stops rearranging: drag any print where you want it,
@@ -54,8 +50,10 @@ your arrangement back if you change your mind.
 sheet at its real dimensions on screen — and says so. *Fit* shrinks it to the
 window and labels itself "(fit)" so you always know what you are looking at, and
 the − / + buttons step between 10% and 400%. **Gridlines** puts a 10 mm grid over
-the sheet, heavier every 50 mm, for judging alignment by eye. It is drawn on
-screen only and never reaches the paper.
+the sheet, heavier every 50 mm, for judging alignment by eye. **Sizes on each
+photo** writes the measurements across every print — `6.00 × 4.00 in · 15.2 ×
+10.2 cm` — so you can check a size without doing arithmetic. Both are drawn on
+screen only and never reach the paper.
 
 **Then print or save a PDF** at 150, 300 or 600 DPI.
 
@@ -196,7 +194,7 @@ is exactly what runs.
 | File | Purpose |
 |---|---|
 | `js/presets.js` | Paper, print-size and printer tables; millimetre/DPI conversions |
-| `js/layout.js` | Grid fitting, area maximising, MaxRects packing, contact sheets |
+| `js/layout.js` | Grid fitting, area maximising, MaxRects packing |
 | `js/imaging.js` | Resampling, auto-levels, unsharp masking, AI upscaling |
 | `js/profile.js` | ICC / PNG colour-profile reader |
 | `js/text.js` | Text overlays: styles, and the canvas and DOM renderers |

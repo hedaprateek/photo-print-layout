@@ -328,8 +328,24 @@ select { cursor: pointer; }
   font-variant-numeric: tabular-nums; color: var(--text);
 }
 
-/* On screen only — the print path builds its own sheets and never sees this. */
+/* On screen only — the print path builds its own sheets and never sees these. */
 .grid-lines { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+.slot-dim {
+  position: absolute;
+  left: 50%;
+  bottom: calc(1.2mm * var(--inv, 1));
+  transform: translateX(-50%);
+  font-family: system-ui, sans-serif;
+  font-size: calc(2.6mm * var(--inv, 1));
+  line-height: 1.3;
+  padding: calc(0.5mm * var(--inv, 1)) calc(1.3mm * var(--inv, 1));
+  border-radius: calc(0.9mm * var(--inv, 1));
+  background: rgba(10, 14, 26, .78);
+  color: #eef1fb;
+  white-space: nowrap;
+  pointer-events: none;
+}
 
 .preview {
   flex: 1;

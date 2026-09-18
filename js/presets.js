@@ -74,50 +74,43 @@
       id: 'pp8',
       name: '8 passport',
       hint: 'Eight 35×45 mm passport photos on A4',
-      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'contain' },
+      settings: { paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'contain' },
       grid: { source: 'one', sizeId: 'id_35x45', fill: false, count: 8 }
     },
     {
       id: 'ppfull',
       name: 'Passport, full sheet',
       hint: 'As many 35×45 mm passport photos as an A4 sheet holds',
-      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'contain' },
+      settings: { paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'contain' },
       grid: { source: 'one', sizeId: 'id_35x45', fill: false, count: 30 }
     },
     {
       id: 'stamp16',
       name: '16 stamp',
       hint: 'Sixteen 20×25 mm stamp photos on A4',
-      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'contain' },
+      settings: { paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'contain' },
       grid: { source: 'one', sizeId: 'id_stamp', fill: false, count: 16 }
     },
     {
       id: 'r4x2',
       name: '2 × 4R',
       hint: 'Two 4×6 inch prints on one A4 sheet',
-      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 3, fit: 'contain' },
+      settings: { paperId: 'a4', orientation: 'portrait', margin: 5, gap: 3, fit: 'contain' },
       grid: { source: 'one', sizeId: 'p_4r', fill: false, count: 2 }
     },
     {
       id: 'fullpage',
       name: 'Full page',
       hint: 'One photo as large as the sheet allows',
-      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 0, fit: 'contain' },
+      settings: { paperId: 'a4', orientation: 'portrait', margin: 5, gap: 0, fit: 'contain' },
       grid: { source: 'one', fill: true, fillCount: 1 }
     },
     {
-      id: 'everyone',
-      name: 'One sheet each',
-      hint: 'Every photo gets its own sheet of 8 passport photos',
-      settings: { mode: 'grid', paperId: 'a4', orientation: 'portrait', margin: 5, gap: 2, fit: 'contain' },
-      grid: { source: 'each', sizeId: 'id_35x45', fill: false, count: 8 }
-    },
-    {
-      id: 'contact',
-      name: 'Contact sheet',
-      hint: 'Every photo as a labelled thumbnail, to choose from',
-      settings: { mode: 'contact', paperId: 'a4', orientation: 'portrait', margin: 8, gap: 3, contactCols: 4 },
-      grid: {}
+      id: 'all4r',
+      name: 'All at 4R',
+      hint: 'One 4×6 inch print of every photo, packed together',
+      settings: { paperId: 'a4', orientation: 'portrait', margin: 5, gap: 3, fit: 'contain' },
+      grid: { source: 'all', sizeId: 'p_4r', fill: false, count: 1 }
     }
   ];
 
