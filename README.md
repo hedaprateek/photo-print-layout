@@ -1,7 +1,7 @@
 # Print Sheet
 
-Arrange any number of photos onto a sheet of paper with as little waste as
-possible, enhance them for print, then send them straight to the printer.
+Drop in your photos and they are arranged onto as few sheets of paper as they
+will go into — at their own size, at their own quality, untouched. Then print.
 
 **Live: https://hedaprateek.github.io/photo-print-layout/**
 
@@ -15,22 +15,36 @@ Everything runs in your browser. Photos are never uploaded anywhere.
 (no key, no setup), search Pexels or Unsplash with a free key of your own, or
 paste an image URL. Drag entries in the list to reorder them.
 
-**Pick a paper size** — A3, A4, A5, A6, Letter, Legal, Tabloid, 4×6, 5×7, 8×10,
-or a custom size in millimetres. Portrait or landscape.
+**That is already the whole job.** Nothing is resized, cropped, turned or
+duplicated. Each photo prints at the size its own pixels come to — a 1800×1200
+photo is 1800 ÷ 300 by 1200 ÷ 300 inches, so 152 × 102 mm — and those rectangles
+are packed into the fewest sheets they fit on. One copy of each, because copies
+are something you ask for rather than something you are given.
 
-**Pick a print size** — passport 35×45, US 2×2, visa 35×35, stamp 20×25, 3R, 4R,
-5R, 6R, 8R, squares, postcard, wallet, or a custom size. Or choose *Fill the
-sheet* and it works out the largest size that fits the number you want per page.
+**Then change whatever you want.** Everything below is an override you reach for
+when you need it, not a decision standing between you and a printed sheet.
 
-**There is one arrangement, and it is the tight one.** Say which photos, what
-size, and how many copies. Every print is then packed into the fewest sheets it
-will go into — there are no modes to pick between. Three photos at four copies
-each lands on one sheet, not three. A4 holds 30 passport photos with a 5 mm
-margin and 2 mm gaps.
+**Paper** — A3, A4, A5, A6, Letter, Legal, Tabloid, 4×6, 5×7, 8×10, or a custom
+size in millimetres. Portrait or landscape.
+
+**A print size**, if you want every photo at one — passport 35×45, US 2×2, visa
+35×35, stamp 20×25, 3R, 4R, 5R, 6R, 8R, squares, postcard, wallet, or a custom
+size. Or *Fill the sheet*, which works out the largest size that fits the number
+you want per page. *Original size* is always there to go back to.
+
+**Copies**, if you want more than one of each. Three photos at four copies each
+lands on one sheet, not three. A4 holds 30 passport photos with a 5 mm margin
+and 2 mm gaps.
 
 If one photo needs a different size from the rest, tick *Give photos their own
 sizes* and set them individually in the Photos list. A 4R of one face plus eight
 passport of another is still a single job, packed together.
+
+**If a photo is bigger than the paper** — a 4000×3000 phone photo is 339 × 254
+mm at 300 DPI, which no A4 sheet will take — it says so, and says what to do:
+raise the print quality. The same pixels at 600 DPI cover half the paper and
+print at 169 × 127 mm, so nothing is thrown away and nothing is cropped. It
+names the figure, so it isn't a guess.
 
 **Or skip all of that.** *Quick start* has one-click recipes for the jobs people
 actually come here to do — 8 passport, a full sheet of passport photos, 16 stamp,
@@ -62,8 +76,9 @@ one click. `Ctrl+Z` undoes removals, reordering and edits.
 
 ## The parts that matter for printing
 
-**The size you ask for is the size you get.** Type 50 × 70 and every print is
-50 × 70, whatever shape the photo is — nothing is turned round, resized or
+**The size you ask for is the size you get** — and if you ask for nothing, you
+get the photo's own. Type 50 × 70 and every print is 50 × 70, whatever shape the
+photo is — nothing is turned round, resized or
 cropped behind your back. A photo that does not match sits inside its frame with
 a white margin, and the read-out tells you what the photo itself measures so the
 difference is never a surprise. Two other modes are a click away: *Fill & crop*

@@ -44,10 +44,16 @@
     },
     grid: {
       source: 'all',
+      // The default is to leave every photo exactly as it is and simply
+      // arrange them. A print size is an override, not a requirement.
+      original: true,
+      sizeChosen: false,
       sizeId: 'id_35x45',
       customW: 60,
       customH: 80,
-      count: 8,
+      // One of each photo. Copies are something you ask for, not a default.
+      count: 1,
+      countChosen: false,
       fill: false,
       fillCount: 4
     }
@@ -147,6 +153,10 @@
       // Same reasoning: nobody asked for their typed size to be turned round.
       if (!state.settings.orientChosen) state.settings.autoOrient = false;
       Object.assign(state.grid, raw.grid || {});
+      // Same rule again: nobody asked for their photos to be resized, so
+      // anyone who never picked a print size gets them left alone.
+      if (!state.grid.sizeChosen) state.grid.original = true;
+      if (!state.grid.countChosen) state.grid.count = 1;
     } catch (e) {
       /* ignore corrupt settings */
     }
@@ -204,7 +214,14 @@
     // `persist` is a privacy choice, not part of a layout setup.
     const keepPersist = state.settings.persist;
     Object.assign(state.settings, preset.settings, { persist: keepPersist });
-    Object.assign(state.grid, preset.grid);
+    const pg = preset.grid || {};
+    Object.assign(state.grid, pg);
+    /* Setups saved before photos could print at their own size have no record
+       of it, and every one of those had a size picked — so take the absence as
+       "a size was chosen" rather than letting the current mode leak through. */
+    state.grid.original = pg.original === true;
+    state.grid.sizeChosen = true;
+    state.grid.countChosen = true;
     saveSettings();
     App.clearSlotCache();
     refresh();
@@ -483,8 +500,26 @@
 
   const selectedPhoto = () => state.photos.find((p) => p.id === state.selectedId) || null;
 
+  /* A photo's own size: its pixels at the print resolution. Nothing is
+     resized, resampled or cropped — this is simply how big the picture is.
+     A 1800 × 1200 photo at 300 DPI is 152.4 × 101.6 mm because that is what
+     1800 pixels measures when 300 of them go to the inch. */
+  function naturalSize(photo, dpi) {
+    if (!photo || !photo.w || !photo.h) return { w: 60, h: 80 };
+    const rot = (((photo.rotate || 0) % 360) + 360) % 360;
+    const swapped = rot === 90 || rot === 270;
+    const mm = (px) => (px / Math.max(1, dpi)) * App.MM_PER_IN;
+    return {
+      w: mm(swapped ? photo.h : photo.w),
+      h: mm(swapped ? photo.w : photo.h)
+    };
+  }
+
   function gridItemSize(paper, photo) {
     const g = state.grid;
+    if (g.original) {
+      return naturalSize(photo || selectedPhoto() || state.photos[0], state.settings.dpi);
+    }
     if (g.fill) {
       const ref = photo || selectedPhoto() || state.photos[0];
       const aspect = ref ? ref.w / ref.h : 3 / 4;
@@ -540,7 +575,9 @@
       const rows = photo.sizes && photo.sizes.length ? photo.sizes : [defaultSizeRow()];
       return App.findSize(rows[0].sizeId);
     }
-    return state.grid.fill ? null : App.findSize(state.grid.sizeId);
+    // At original or fill size there is no preset in play, so no identity rules.
+    if (state.grid.original || state.grid.fill) return null;
+    return App.findSize(state.grid.sizeId);
   }
 
   /* What will really happen to this photo, which is not always the global
@@ -553,6 +590,38 @@
   }
 
   /* ---------------------------------------------------------------- layout */
+
+  /* A photo printed at its own size can simply be bigger than the paper. That
+     is not an error to shrug at — say how big it is, and give the one lever
+     that fixes it without touching the photo: print resolution. The same
+     pixels at a higher DPI cover less paper, so nothing is thrown away. */
+  function fitAdvice(oversized, paper, margin, s) {
+    if (!oversized || !oversized.length) return null;
+    const fitW = Math.max(1, paper.w - margin * 2);
+    const fitH = Math.max(1, paper.h - margin * 2);
+    let worst = 1;
+    let biggest = oversized[0];
+    for (const it of oversized) {
+      let need = Math.max(it.w / fitW, it.h / fitH);
+      if (s.allowRotate) need = Math.min(need, Math.max(it.h / fitW, it.w / fitH));
+      if (need > worst) { worst = need; biggest = it; }
+    }
+    const dpi = Math.max(1, s.dpi);
+    const need = dpi * worst;
+    // Only ever name a quality the Print quality menu actually offers.
+    const wanted = App.QUALITY.map((q) => q.id).filter((id) => id >= need).sort((a, b) => a - b)[0];
+    const out = {
+      count: oversized.length,
+      biggest: App.fmtMm(biggest.w) + ' × ' + App.fmtMm(biggest.h),
+      dpi: wanted || null,
+      at: null
+    };
+    if (wanted) {
+      const shrink = dpi / wanted;
+      out.at = App.fmtMm(biggest.w * shrink) + ' × ' + App.fmtMm(biggest.h * shrink);
+    }
+    return out;
+  }
 
   function computeLayout() {
     const paper = currentPaper();
@@ -601,7 +670,8 @@
           w: box.w,
           h: box.h,
           copies: count,
-          fit: forcedFit(g.sizeId)
+          // Only a real identity preset forces its frame to be filled.
+          fit: g.original || g.fill ? undefined : forcedFit(g.sizeId)
         });
       }
     }
@@ -613,6 +683,7 @@
       pages: res.pages,
       perSheet: res.pages.length ? res.pages[0].items.length : 0,
       oversized: res.oversized,
+      oversizedFix: fitAdvice(res.oversized, paper, margin, s),
       itemSize: gridItemSize(paper, photos[0])
     };
   }
@@ -693,7 +764,17 @@
       isError = true;
     }
     if (layout.oversized && layout.oversized.length) {
-      messages.push(layout.oversized.length + ' photo(s) are larger than the sheet and were skipped.');
+      const fix = layout.oversizedFix;
+      let msg = layout.oversized.length + ' photo(s) print bigger than this sheet at their own size';
+      if (fix) msg += ' — the largest is ' + fix.biggest;
+      msg += '.';
+      if (fix && fix.dpi) {
+        msg += ' Set Print quality to ' + fix.dpi + ' DPI and it prints at ' + fix.at +
+          ' instead: the same pixels, packed tighter on the paper, so nothing is thrown away.';
+      } else {
+        msg += ' Use larger paper, or choose a print size to scale it down.';
+      }
+      messages.push(msg);
       isError = true;
     }
 
@@ -736,8 +817,8 @@
       const empty = document.createElement('div');
       empty.className = 'empty-state';
       empty.innerHTML = state.photos.length
-        ? '<h3>Nothing to arrange yet</h3><p>Pick a print size that fits the sheet, or raise the number of copies.</p>'
-        : '<h3>Add photos to begin</h3><p>Choose a paper size and a photo size on the right. Sheets are filled to waste as little paper as possible, and you can print straight from here.</p>';
+        ? '<h3>Nothing fits this sheet yet</h3><p>Your photos print bigger than the paper at their own size. Raise Print quality, use larger paper, or pick a print size.</p>'
+        : '<h3>Add photos to begin</h3><p>They print at their own size and are packed onto as few sheets as possible. Change anything you like afterwards.</p>';
       host.appendChild(empty);
       return;
     }
@@ -1419,6 +1500,10 @@
     if (includeFill) {
       const og = document.createElement('optgroup');
       og.label = 'Automatic';
+      const orig = document.createElement('option');
+      orig.value = '__original';
+      orig.textContent = 'Original size — leave my photos alone';
+      og.appendChild(orig);
       const o = document.createElement('option');
       o.value = '__fill';
       o.textContent = 'Fill the sheet (largest that fits)';
@@ -1501,8 +1586,8 @@
     );
 
     $('grid-source').value = g.source;
-    $('grid-size').value = g.fill ? '__fill' : g.sizeId;
-    $('grid-custom').hidden = g.fill || g.sizeId !== 'custom';
+    $('grid-size').value = g.original ? '__original' : g.fill ? '__fill' : g.sizeId;
+    $('grid-custom').hidden = g.original || g.fill || g.sizeId !== 'custom';
     $('grid-custom-w').value = g.customW;
     $('grid-custom-h').value = g.customH;
     $('grid-fill-field').hidden = !g.fill;
@@ -2084,7 +2169,14 @@
     const beforeGrid = Object.assign({}, state.grid);
 
     Object.assign(state.settings, job.settings);
-    Object.assign(state.grid, job.grid || {});
+    const jg = job.grid || {};
+    Object.assign(state.grid, jg);
+    /* A recipe names the size and the number it wants, so clicking one is an
+       explicit choice — it overrides printing at the photo's own size, unless
+       the recipe is one that deliberately asks for it. */
+    state.grid.original = jg.original === true;
+    state.grid.sizeChosen = true;
+    state.grid.countChosen = true;
 
     pushUndo('the "' + job.name + '" quick start', () => {
       Object.assign(state.settings, beforeSettings);
@@ -2467,8 +2559,10 @@
 
     $('grid-size').addEventListener('change', (e) => {
       const v = e.target.value;
+      state.grid.original = v === '__original';
       state.grid.fill = v === '__fill';
-      if (!state.grid.fill) state.grid.sizeId = v;
+      state.grid.sizeChosen = true; // their call from here on
+      if (!state.grid.original && !state.grid.fill) state.grid.sizeId = v;
       App.clearSlotCache();
       saveSettings();
       refresh();
@@ -2476,7 +2570,10 @@
 
     bindNumber('grid-custom-w', (v) => (state.grid.customW = v), 5, 1000);
     bindNumber('grid-custom-h', (v) => (state.grid.customH = v), 5, 1000);
-    bindNumber('grid-count', (v) => (state.grid.count = v), 1, 2000);
+    bindNumber('grid-count', (v) => {
+      state.grid.count = v;
+      state.grid.countChosen = true; // their call from here on
+    }, 1, 2000);
     bindNumber('grid-fill-count', (v) => (state.grid.fillCount = v), 1, 200);
 
     $('grid-quick').addEventListener('click', (e) => {
