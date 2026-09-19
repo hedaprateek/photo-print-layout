@@ -265,12 +265,35 @@
     };
   }
 
+  /* A factor on top of whatever size was picked. Half of a photo's own size is
+     a reasonable thing to want and awkward to work out by hand, so it is a
+     control rather than arithmetic the user has to do. */
+  function rowScale(row) {
+    const k = Number(row && row.scale);
+    return k > 0 && isFinite(k) ? clamp(k, 0.05, 10) : 1;
+  }
+
+  /* "Half of" reads better than "0.5× of" for the factors people actually use. */
+  function factorLabel(k) {
+    if (Math.abs(k - 0.25) < 1e-6) return 'A quarter of';
+    if (Math.abs(k - 0.5) < 1e-6) return 'Half of';
+    if (Math.abs(k - 2) < 1e-6) return 'Twice';
+    if (Math.abs(k - 3) < 1e-6) return 'Three times';
+    const n = Math.round(k * 100) / 100;
+    return n + '× of';
+  }
+
   function rowDims(row, photo) {
-    if (row.sizeId === '__original') return naturalSize(photo, state.settings.dpi);
-    if (row.sizeId === 'custom') return { w: row.customW || 60, h: row.customH || 80 };
-    const s = App.findSize(row.sizeId);
-    if (!s) return naturalSize(photo, state.settings.dpi);
-    return { w: s.w, h: s.h };
+    let base;
+    if (row.sizeId === '__original') base = naturalSize(photo, state.settings.dpi);
+    else if (row.sizeId === 'custom') base = { w: row.customW || 60, h: row.customH || 80 };
+    else {
+      const def = App.findSize(row.sizeId);
+      base = def ? { w: def.w, h: def.h } : naturalSize(photo, state.settings.dpi);
+    }
+    const k = rowScale(row);
+    if (k === 1) return base;
+    return { w: Math.max(1, base.w * k), h: Math.max(1, base.h * k) };
   }
 
   /* The slot a photo should actually occupy.
@@ -554,6 +577,45 @@
     unit.textContent = 'mm';
     custom.append(cw, by, ch, unit);
 
+    /* Half it, double it, or type a factor. Halving a 13-inch photo to fit the
+       page is the common want, and working the millimetres out by hand is the
+       part nobody should have to do. */
+    const scaleWrap = document.createElement('span');
+    scaleWrap.className = 'import-scale';
+    const setScale = (k) => {
+      row.scale = clamp(Math.round(k * 1000) / 1000, 0.05, 10);
+      row.chosen = true;
+      syncAll();
+    };
+    const half = document.createElement('button');
+    half.type = 'button';
+    half.className = 'chip chip-mini';
+    half.textContent = '½';
+    half.title = 'Half the size';
+    half.addEventListener('click', () => setScale(rowScale(row) / 2));
+    const dbl = document.createElement('button');
+    dbl.type = 'button';
+    dbl.className = 'chip chip-mini';
+    dbl.textContent = '×2';
+    dbl.title = 'Twice the size';
+    dbl.addEventListener('click', () => setScale(rowScale(row) * 2));
+    const factor = document.createElement('input');
+    factor.type = 'number';
+    factor.min = '0.05';
+    factor.max = '10';
+    factor.step = '0.05';
+    factor.className = 'import-factor';
+    factor.title = 'Scale factor';
+    factor.setAttribute('aria-label', 'Scale factor for ' + photo.name);
+    factor.addEventListener('input', () => {
+      const k = parseFloat(factor.value);
+      if (k > 0) setScale(k);
+    });
+    const times = document.createElement('span');
+    times.className = 'muted small';
+    times.textContent = '×';
+    scaleWrap.append(half, dbl, factor, times);
+
     const copiesWrap = document.createElement('span');
     copiesWrap.className = 'import-copies';
     const copies = num(row.copies, 1, 500, (v) => (row.copies = Math.round(v)));
@@ -563,7 +625,7 @@
     copiesLabel.textContent = 'copies';
     copiesWrap.append(copies, copiesLabel);
 
-    controls.append(sel, custom, copiesWrap);
+    controls.append(sel, custom, scaleWrap, copiesWrap);
 
     // With a batch, setting the same thing twenty times is the actual problem.
     if (photos.length > 1) {
@@ -584,6 +646,7 @@
           target.customW = row.customW;
           target.customH = row.customH;
           target.copies = row.copies;
+          target.scale = rowScale(row);
           target.chosen = true;
           other.sizes.length = 1;
         }
@@ -599,6 +662,8 @@
       ch.value = row.customH;
       copies.value = row.copies;
       custom.hidden = row.sizeId !== 'custom';
+      const k = rowScale(row);
+      if (document.activeElement !== factor) factor.value = String(k);
 
       const dims = rowDims(row, photo);
       const box = row.sizeId === '__original' ? dims : shapedSize(dims, photo, row.sizeId);
@@ -619,10 +684,12 @@
       badge.textContent = Math.round(dpi) + ' DPI · ' + verdict.label;
       measure.append(size, alt, badge);
 
-      if (row.sizeId === '__original') {
+      if (row.sizeId === '__original' || k !== 1) {
         const tag = document.createElement('span');
-        tag.className = 'badge ok';
-        tag.textContent = 'Suggested — its own size';
+        tag.className = k === 1 ? 'badge ok' : 'badge ai';
+        const of = row.sizeId === '__original' ? 'its own size' : 'the chosen size';
+        tag.textContent =
+          k === 1 ? 'Suggested — its own size' : factorLabel(k) + ' ' + of;
         measure.appendChild(tag);
       }
 
@@ -891,16 +958,56 @@
     return out;
   }
 
+  /* Every print one photo asks for. Both the packer and the realign go through
+     here, so a hand-arranged sheet is refilled on exactly the terms the
+     automatic one would have used. */
+  function entriesForPhoto(photo, paper) {
+    const s = state.settings;
+    const g = state.grid;
+    if (s.perPhotoSizes) {
+      return photoSizeRows(photo)
+        .filter((row) => row.copies > 0)
+        .map((row) => ({
+          photoId: photo.id,
+          w: row.w,
+          h: row.h,
+          copies: row.copies,
+          fit: forcedFit(row.sizeId)
+        }));
+    }
+    const box = gridItemSize(paper, photo);
+    return [
+      {
+        photoId: photo.id,
+        w: box.w,
+        h: box.h,
+        copies: g.fill ? Math.max(1, g.fillCount) : Math.max(1, g.count),
+        // Only a real identity preset forces its frame to be filled.
+        fit: g.original || g.fill ? undefined : forcedFit(g.sizeId)
+      }
+    ];
+  }
+
   function computeLayout() {
     const paper = currentPaper();
 
     // Once the sheets are arranged by hand the packer stops touching them.
     if (state.manual) {
+      /* A print whose photo has since been removed is not drawn, so it must
+         not be counted either — the sheet caption would otherwise claim more
+         photos than are on it. The stored arrangement is left alone; this only
+         decides what is shown. */
+      const known = {};
+      for (const p of state.photos) known[p.id] = true;
+      const pages = state.manual.pages
+        .map((p) => ({ items: p.items.filter((it) => known[it.photoId]) }))
+        .filter((p) => p.items.length);
       return {
         paper,
-        pages: state.manual.pages,
-        perSheet: state.manual.pages.length ? state.manual.pages[0].items.length : 0,
-        manual: true
+        pages,
+        perSheet: pages.length ? pages[0].items.length : 0,
+        manual: true,
+        missing: countMissingFromManual()
       };
     }
 
@@ -916,33 +1023,8 @@
     /* One arrangement, always: gather every print that has been asked for and
        pack them into the fewest sheets. There is no second way to choose
        between — "best use of the paper" is the only behaviour. */
-    const count = g.fill ? Math.max(1, g.fillCount) : Math.max(1, g.count);
     const entries = [];
-    for (const photo of photos) {
-      if (s.perPhotoSizes) {
-        for (const row of photoSizeRows(photo)) {
-          if (row.copies > 0) {
-            entries.push({
-              photoId: photo.id,
-              w: row.w,
-              h: row.h,
-              copies: row.copies,
-              fit: forcedFit(row.sizeId)
-            });
-          }
-        }
-      } else {
-        const box = gridItemSize(paper, photo);
-        entries.push({
-          photoId: photo.id,
-          w: box.w,
-          h: box.h,
-          copies: count,
-          // Only a real identity preset forces its frame to be filled.
-          fit: g.original || g.fill ? undefined : forcedFit(g.sizeId)
-        });
-      }
-    }
+    for (const photo of photos) entries.push.apply(entries, entriesForPhoto(photo, paper));
     if (!entries.length) return { paper, pages: [], perSheet: 0 };
 
     const res = App.layoutPack(Object.assign({ entries }, base));
@@ -1046,6 +1128,15 @@
       isError = true;
     }
 
+    /* The packer is off while arranging by hand, so nothing has placed a photo
+       added since. Say so rather than letting it silently not appear. */
+    if (layout.manual && layout.missing) {
+      messages.push(
+        layout.missing + ' photo(s) are not on these hand-arranged sheets yet — ' +
+        '"Realign — close the gaps" keeps your arrangement and fits them in.'
+      );
+    }
+
     const clipped = clippedCount(layout, paper);
     if (clipped) {
       const edges = App.printerEdges(state.settings.printerId, state.settings.printerEdge);
@@ -1084,9 +1175,25 @@
     if (!layout.pages.length) {
       const empty = document.createElement('div');
       empty.className = 'empty-state';
-      empty.innerHTML = state.photos.length
-        ? '<h3>Nothing fits this sheet yet</h3><p>Your photos print bigger than the paper at their own size. Raise Print quality, use larger paper, or pick a print size.</p>'
-        : '<h3>Add photos to begin</h3><p>They print at their own size and are packed onto as few sheets as possible. Change anything you like afterwards.</p>';
+      if (layout.manual) {
+        // Every print's photo has gone. Without a way out the sheet controls
+        // are unreachable, because they are drawn on the sheets themselves.
+        empty.innerHTML =
+          '<h3>These sheets are empty now</h3><p>Every print you arranged by hand ' +
+          'belonged to a photo that has since been removed.</p>';
+        const back = document.createElement('button');
+        back.type = 'button';
+        back.className = 'btn';
+        back.textContent = state.photos.length ? 'Realign what is left' : 'Back to automatic';
+        back.addEventListener('click', () =>
+          (state.photos.length ? realignManual() : exitFreeMode())
+        );
+        empty.appendChild(back);
+      } else {
+        empty.innerHTML = state.photos.length
+          ? '<h3>Nothing fits this sheet yet</h3><p>Your photos print bigger than the paper at their own size. Raise Print quality, use larger paper, or pick a print size.</p>'
+          : '<h3>Add photos to begin</h3><p>They print at their own size and are packed onto as few sheets as possible. Change anything you like afterwards.</p>';
+      }
       host.appendChild(empty);
       return;
     }
@@ -1111,7 +1218,21 @@
       modeBtn.className = 'link-btn';
       modeBtn.textContent = layout.manual ? 'Back to automatic' : 'Arrange by hand';
       modeBtn.addEventListener('click', () => (layout.manual ? exitFreeMode() : enterFreeMode()));
-      label.append(caption, modeBtn);
+      label.append(caption);
+
+      // Only worth offering where it can do something: on a hand-arranged sheet.
+      if (layout.manual && i === 0) {
+        const realign = document.createElement('button');
+        realign.type = 'button';
+        realign.className = 'link-btn';
+        realign.textContent = 'Realign — close the gaps';
+        realign.title =
+          'Keep these prints and the changes you have made, and pack them up ' +
+          'again so nothing is left standing over an empty space';
+        realign.addEventListener('click', realignManual);
+        label.appendChild(realign);
+      }
+      label.appendChild(modeBtn);
 
       const wrap = document.createElement('div');
       wrap.className = 'sheet-wrap';
@@ -1244,6 +1365,81 @@
       'the buttons above it to turn, copy or remove. Arrow keys nudge. The layout ' +
       'settings no longer rearrange these sheets.'
     );
+  }
+
+  /* Photos added since the sheets were arranged by hand are not on them: the
+     packer is switched off, so nothing has placed them. Worth saying, since
+     otherwise a photo is added and simply never appears. */
+  function countMissingFromManual() {
+    if (!state.manual) return 0;
+    const placed = {};
+    for (const page of state.manual.pages) for (const it of page.items) placed[it.photoId] = true;
+    return state.photos.filter((p) => !placed[p.id]).length;
+  }
+
+  /* Keep the changes, close the gaps. Removing a print from a hand-arranged
+     sheet leaves a hole, and adding a photo leaves it off the sheets
+     altogether. This re-packs what is actually there — at the sizes they have
+     been given by hand, copies and all — so the prints move up to fill the
+     space, and stays in hand-arrange mode so the next change is still yours. */
+  function realignManual() {
+    if (!state.manual) return;
+    const before = manualSnapshot();
+    const paper = currentPaper();
+    const s = state.settings;
+    const margin = clamp(s.margin, 0, Math.min(paper.w, paper.h) / 2 - 1);
+    const gap = Math.max(0, s.gap);
+
+    const known = {};
+    for (const p of state.photos) known[p.id] = true;
+
+    const entries = [];
+    const placed = {};
+    for (const page of state.manual.pages) {
+      for (const it of page.items) {
+        if (!known[it.photoId]) continue; // its photo was removed
+        placed[it.photoId] = true;
+        entries.push({ photoId: it.photoId, w: it.w, h: it.h, fit: it.fit, copies: 1 });
+      }
+    }
+    // Anything added since comes in at the size it would otherwise have printed.
+    let broughtIn = 0;
+    for (const photo of state.photos) {
+      if (placed[photo.id]) continue;
+      for (const e of entriesForPhoto(photo, paper)) {
+        entries.push(e);
+        broughtIn += Math.max(1, e.copies || 1);
+      }
+    }
+
+    if (!entries.length) {
+      notice('There is nothing left on the sheets to realign.', 'error');
+      return;
+    }
+
+    const res = App.layoutPack({ entries, paper, margin, gap, allowRotate: s.allowRotate });
+    if (!res.pages.length) {
+      notice('Nothing here fits the sheet at its current size, so there is nothing to realign.', 'error');
+      return;
+    }
+
+    const wasSheets = state.manual.pages.length;
+    state.manual.pages = res.pages.map((p) => ({ items: p.items.map((it) => Object.assign({}, it)) }));
+    pushManualUndo('realigning the sheets', before);
+    state.selected = null;
+    App.clearSlotCache();
+    refresh();
+
+    const bits = ['Realigned — the prints have moved up to fill the gaps.'];
+    if (broughtIn) {
+      bits.push(broughtIn + ' print(s) that were not on a sheet have been placed.');
+    }
+    if (res.oversized && res.oversized.length) {
+      bits.push(res.oversized.length + ' were too big for the sheet and left off.');
+    }
+    const now = state.manual.pages.length;
+    if (now < wasSheets) bits.push('Down from ' + wasSheets + ' sheets to ' + now + '.');
+    notice(bits.join(' '), res.oversized && res.oversized.length ? 'error' : '');
   }
 
   function exitFreeMode() {
@@ -1661,6 +1857,46 @@
 
       line.append(sel, copies, del);
       wrap.appendChild(line);
+
+      // The same halve/double the import offers, so it stays changeable after.
+      const scaleLine = document.createElement('div');
+      scaleLine.className = 'size-scale';
+      const setScale = (k) => {
+        row.scale = clamp(Math.round(k * 1000) / 1000, 0.05, 10);
+        row.chosen = true;
+        persistPhoto(photo);
+        refresh();
+      };
+      const mini = (text, title, onClick) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'chip chip-mini';
+        b.textContent = text;
+        b.title = title;
+        b.addEventListener('click', onClick);
+        return b;
+      };
+      const factor = document.createElement('input');
+      factor.type = 'number';
+      factor.min = '0.05';
+      factor.max = '10';
+      factor.step = '0.05';
+      factor.value = String(rowScale(row));
+      factor.title = 'Scale factor';
+      factor.addEventListener('change', () => {
+        const k = parseFloat(factor.value);
+        if (k > 0) setScale(k);
+      });
+      const label = document.createElement('span');
+      label.className = 'muted small';
+      label.textContent = 'size ×';
+      scaleLine.append(
+        label,
+        factor,
+        mini('½', 'Half the size', () => setScale(rowScale(row) / 2)),
+        mini('×2', 'Twice the size', () => setScale(rowScale(row) * 2))
+      );
+      wrap.appendChild(scaleLine);
 
       if (row.sizeId === 'custom') {
         const custom = document.createElement('div');

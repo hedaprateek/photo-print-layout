@@ -24,6 +24,13 @@ all* sets the whole batch at once. If a photo is too big for the paper you are
 on, it says so there, before it is added rather than after. *Don't ask again*
 turns the question off for good, and Settings turns it back on.
 
+**Half it, or double it.** Beside every size is a **½** and a **×2**, and a box
+for any factor you like. A 4000×3000 photo is 339 × 254 mm at its own size and
+won't go on A4; **½** makes it 169 × 127 mm, which will — and the resolution
+read-out climbs from 300 to 600 DPI as it shrinks, because the pixels haven't
+gone anywhere. The factor stays with the photo and can be changed afterwards
+from the Photos list.
+
 **Then that is already the whole job.** Nothing is resized, cropped, turned or
 duplicated. The photos are packed into the fewest sheets they fit on, one copy
 of each, because copies are something you ask for rather than something you are
@@ -67,6 +74,16 @@ further, Delete removes. Prints snap to the page margins, the centre and each
 other's edges, so arranging by hand still comes out square instead of undoing
 the packing. *Back to automatic* returns to the packed layout, and undo brings
 your arrangement back if you change your mind.
+
+**Keep the changes, close the gaps.** Taking a print off a hand-arranged sheet
+leaves a hole, and a photo added afterwards isn't on the sheets at all — the
+packer is switched off, so nothing has placed it. *Realign — close the gaps*
+re-packs what is actually there, at the sizes you gave them, copies and all:
+the prints move up to fill the space, anything added is brought in, and you
+stay in hand-arrange mode so the next change is still yours. It says what it
+did — how many it placed, and if the sheets went down from three to two. Undo
+puts the old arrangement back. If every print's photo has been removed, the
+sheet says so and offers the way back rather than leaving you stuck.
 
 **The preview is at a scale you set.** It opens at *Actual size* — 100%, the
 sheet at its real dimensions on screen — and says so. *Fit* shrinks it to the
