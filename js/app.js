@@ -40,6 +40,7 @@
       printerId: 'inkjet',
       printerEdge: 3.5,
       perPhotoSizes: false, // let each photo carry its own size
+      askOnImport: true,    // ask what size each import should print at
       showSizes: false      // measurements over each print in the preview
     },
     grid: {
@@ -256,12 +257,19 @@
   };
 
   function defaultSizeRow() {
-    return { sizeId: state.grid.sizeId || 'id_35x45', customW: 60, customH: 80, copies: 1 };
+    return {
+      sizeId: state.grid.original ? '__original' : state.grid.sizeId || 'id_35x45',
+      customW: 60,
+      customH: 80,
+      copies: Math.max(1, state.grid.count || 1)
+    };
   }
 
-  function rowDims(row) {
+  function rowDims(row, photo) {
+    if (row.sizeId === '__original') return naturalSize(photo, state.settings.dpi);
     if (row.sizeId === 'custom') return { w: row.customW || 60, h: row.customH || 80 };
     const s = App.findSize(row.sizeId);
+    if (!s) return naturalSize(photo, state.settings.dpi);
     return { w: s.w, h: s.h };
   }
 
@@ -320,12 +328,13 @@
 
   function photoSizeRows(photo) {
     const rows = photo.sizes && photo.sizes.length ? photo.sizes : [defaultSizeRow()];
-    return rows.map((r) =>
-      Object.assign(
-        { sizeId: r.sizeId, copies: r.copies || 0 },
-        shapedSize(rowDims(r), photo, r.sizeId)
-      )
-    );
+    return rows.map((r) => {
+      const dims = rowDims(r, photo);
+      // The photo's own size is already exact — there is nothing to turn to
+      // match it or trim off it, so it skips the shaping entirely.
+      const box = r.sizeId === '__original' ? dims : shapedSize(dims, photo, r.sizeId);
+      return Object.assign({ sizeId: r.sizeId, copies: r.copies || 0 }, box);
+    });
   }
 
   function persistPhoto(photo) {
@@ -382,7 +391,11 @@
 
   const previewSrc = (photo) => photo.previewUrl || photo.thumbUrl || '';
 
-  async function addPhotoFromBlob(blob, meta) {
+  /* Built but not yet added. Importing asks about sizes before anything joins
+     the sheet, so a photo has to be able to exist — with its real pixel
+     dimensions, which is what the suggestion is made from — before the
+     question has been answered. */
+  async function makePhoto(blob, meta) {
     const img = await App.blobToImage(blob);
     const photo = {
       id: uid(),
@@ -407,11 +420,265 @@
     };
     await buildThumbs(photo, img);
     if (img._revoke) URL.revokeObjectURL(img._revoke);
+    return photo;
+  }
 
+  function commitPhoto(photo) {
     state.photos.push(photo);
     if (!state.selectedId) state.selectedId = photo.id;
     persistPhoto(photo);
     return photo;
+  }
+
+  /* Every way in — files, search, a URL — goes through here, so the question
+     about sizes is asked once per import however the photos arrived. */
+  async function importPhotos(photos) {
+    if (!photos.length) return false;
+    if (state.settings.askOnImport) {
+      const ok = await askImportSizes(photos);
+      if (!ok) {
+        for (const p of photos) releasePhoto(p);
+        return false;
+      }
+    }
+    for (const p of photos) commitPhoto(p);
+    adoptImportChoices(photos);
+    App.clearSlotCache();
+    refresh();
+    return true;
+  }
+
+  /* ------------------------------------------------ the question on import */
+
+  let importResolve = null;
+
+  /* Asked once per import: what size should these print at? The suggestion is
+     always the photo's own size, worked out from its pixels — so accepting it
+     changes nothing, which is the point of showing it rather than assuming it.
+     Everything here is a one-off override; it never becomes the new default. */
+  function askImportSizes(photos) {
+    return new Promise((resolve) => {
+      importResolve = resolve;
+      const host = $('import-list');
+      host.innerHTML = '';
+      const syncs = [];
+      const syncAll = () => syncs.forEach((f) => f());
+      for (const photo of photos) {
+        const built = buildImportRow(photo, photos, syncAll);
+        syncs.push(built.sync);
+        host.appendChild(built.el);
+      }
+      syncAll();
+      $('import-title').textContent =
+        photos.length === 1
+          ? 'What size should this print at?'
+          : 'What size should these ' + photos.length + ' photos print at?';
+      $('btn-import-add').textContent =
+        photos.length === 1 ? 'Add photo' : 'Add ' + photos.length + ' photos';
+      $('chk-import-skip').checked = false;
+      openModal('modal-import');
+    });
+  }
+
+  function finishImport(ok) {
+    const resolve = importResolve;
+    importResolve = null;
+    $('modal-import').hidden = true;
+    if (!resolve) return;
+    if (ok && $('chk-import-skip').checked) {
+      state.settings.askOnImport = false;
+      saveSettings();
+      syncControls();
+    }
+    resolve(ok);
+  }
+
+  function buildImportRow(photo, photos, syncAll) {
+    if (!photo.sizes || !photo.sizes.length) photo.sizes = [defaultSizeRow()];
+    const row = photo.sizes[0];
+
+    const el = document.createElement('div');
+    el.className = 'import-row';
+
+    const thumb = document.createElement('img');
+    thumb.className = 'import-thumb';
+    thumb.src = photo.thumbUrl || '';
+    thumb.alt = '';
+
+    const info = document.createElement('div');
+    info.className = 'import-info';
+    const name = document.createElement('div');
+    name.className = 'import-name';
+    name.textContent = photo.name;
+    name.title = photo.name;
+    const px = document.createElement('div');
+    px.className = 'muted small';
+    px.textContent = photo.w + ' × ' + photo.h + ' pixels';
+    const measure = document.createElement('div');
+    measure.className = 'import-measure';
+    info.append(name, px, measure);
+
+    const controls = document.createElement('div');
+    controls.className = 'import-controls';
+
+    const sel = buildSizeSelect(row.sizeId, false);
+    sel.setAttribute('aria-label', 'Print size for ' + photo.name);
+    sel.addEventListener('change', () => {
+      row.sizeId = sel.value;
+      row.chosen = true;
+      syncAll();
+    });
+
+    const num = (value, min, max, onInput) => {
+      const input = document.createElement('input');
+      input.type = 'number';
+      input.min = String(min);
+      input.max = String(max);
+      input.value = String(value);
+      input.addEventListener('input', () => {
+        onInput(clamp(parseFloat(input.value) || min, min, max));
+        row.chosen = true;
+        syncAll();
+      });
+      return input;
+    };
+
+    const custom = document.createElement('span');
+    custom.className = 'import-custom';
+    const cw = num(row.customW, 5, 1000, (v) => (row.customW = v));
+    const ch = num(row.customH, 5, 1000, (v) => (row.customH = v));
+    const by = document.createElement('span');
+    by.textContent = '×';
+    const unit = document.createElement('span');
+    unit.className = 'muted small';
+    unit.textContent = 'mm';
+    custom.append(cw, by, ch, unit);
+
+    const copiesWrap = document.createElement('span');
+    copiesWrap.className = 'import-copies';
+    const copies = num(row.copies, 1, 500, (v) => (row.copies = Math.round(v)));
+    copies.setAttribute('aria-label', 'Copies of ' + photo.name);
+    const copiesLabel = document.createElement('span');
+    copiesLabel.className = 'muted small';
+    copiesLabel.textContent = 'copies';
+    copiesWrap.append(copies, copiesLabel);
+
+    controls.append(sel, custom, copiesWrap);
+
+    // With a batch, setting the same thing twenty times is the actual problem.
+    if (photos.length > 1) {
+      const all = document.createElement('button');
+      all.type = 'button';
+      all.className = 'link-btn';
+      all.textContent = 'Use for all';
+      all.title = 'Give every photo in this import the same size and number of copies';
+      all.addEventListener('click', () => {
+        for (const other of photos) {
+          if (other === photo) continue;
+          if (!other.sizes || !other.sizes.length) other.sizes = [defaultSizeRow()];
+          // Written into the row each dialog line already holds, not over the
+          // top of it: replacing the object would leave those controls bound
+          // to an orphan, showing one size while printing another.
+          const target = other.sizes[0];
+          target.sizeId = row.sizeId;
+          target.customW = row.customW;
+          target.customH = row.customH;
+          target.copies = row.copies;
+          target.chosen = true;
+          other.sizes.length = 1;
+        }
+        row.chosen = true;
+        syncAll();
+      });
+      controls.appendChild(all);
+    }
+
+    function sync() {
+      sel.value = row.sizeId;
+      cw.value = row.customW;
+      ch.value = row.customH;
+      copies.value = row.copies;
+      custom.hidden = row.sizeId !== 'custom';
+
+      const dims = rowDims(row, photo);
+      const box = row.sizeId === '__original' ? dims : shapedSize(dims, photo, row.sizeId);
+      const fit = row.sizeId === '__original' ? 'contain' : forcedFit(row.sizeId) || state.settings.fit;
+      const dpi = App.effectiveDpi(photo.w, photo.h, box.w, box.h, fit);
+      const verdict = App.dpiVerdict(dpi);
+
+      measure.innerHTML = '';
+      const size = document.createElement('strong');
+      size.textContent = App.fmtMm(box.w) + ' × ' + App.fmtMm(box.h);
+      const alt = document.createElement('span');
+      alt.className = 'muted small';
+      alt.textContent =
+        (box.w / 25.4).toFixed(2) + ' × ' + (box.h / 25.4).toFixed(2) + ' in · ' +
+        (box.w / 10).toFixed(1) + ' × ' + (box.h / 10).toFixed(1) + ' cm';
+      const badge = document.createElement('span');
+      badge.className = 'badge ' + verdict.level;
+      badge.textContent = Math.round(dpi) + ' DPI · ' + verdict.label;
+      measure.append(size, alt, badge);
+
+      if (row.sizeId === '__original') {
+        const tag = document.createElement('span');
+        tag.className = 'badge ok';
+        tag.textContent = 'Suggested — its own size';
+        measure.appendChild(tag);
+      }
+
+      /* A photo can be bigger than the paper at its own size, and this is the
+         moment to say so — before it is added and quietly left off a sheet. */
+      const paper = currentPaper();
+      const inset = clamp(state.settings.margin, 0, Math.min(paper.w, paper.h) / 2 - 1);
+      const fitW = paper.w - inset * 2;
+      const fitH = paper.h - inset * 2;
+      const fits =
+        (box.w <= fitW && box.h <= fitH) ||
+        (state.settings.allowRotate && box.h <= fitW && box.w <= fitH);
+      if (!fits) {
+        const warn = document.createElement('span');
+        warn.className = 'badge bad';
+        warn.textContent = 'Bigger than ' + paper.name.split(' —')[0];
+        warn.title =
+          'It will not fit the sheet at this size. Raise Print quality, use larger ' +
+          'paper, or pick a print size.';
+        measure.appendChild(warn);
+      }
+    }
+
+    el.append(thumb, info, controls);
+    return { el, sync };
+  }
+
+  /* If the import asked for anything by hand, the sheet has to honour it photo
+     by photo. Turning that on must not disturb what is already laid out, so
+     every photo that has never been given a size by hand is first written out
+     as exactly what it is being shown as right now. */
+  function adoptImportChoices(added) {
+    const touched = added.some((p) => (p.sizes || []).some((r) => r.chosen));
+    if (!touched || state.settings.perPhotoSizes) return;
+    for (const photo of state.photos) {
+      if (added.indexOf(photo) >= 0) continue;
+      const rows = photo.sizes && photo.sizes.length ? photo.sizes : [];
+      if (rows.some((r) => r.chosen)) continue;
+      photo.sizes = [
+        {
+          sizeId: state.grid.original ? '__original' : state.grid.sizeId || 'id_35x45',
+          customW: state.grid.customW,
+          customH: state.grid.customH,
+          copies: Math.max(1, state.grid.count || 1)
+        }
+      ];
+      persistPhoto(photo);
+    }
+    state.settings.perPhotoSizes = true;
+    saveSettings();
+  }
+
+  async function addPhotoFromBlob(blob, meta) {
+    const photo = await makePhoto(blob, meta);
+    const added = await importPhotos([photo]);
+    return added ? photo : null;
   }
 
   async function addFiles(fileList) {
@@ -422,17 +689,18 @@
     }
     notice('');
     let failed = 0;
+    const made = [];
     for (let i = 0; i < files.length; i++) {
       busy('Reading photo ' + (i + 1) + ' of ' + files.length + '…');
       try {
-        await addPhotoFromBlob(files[i], { name: files[i].name, source: 'upload' });
+        made.push(await makePhoto(files[i], { name: files[i].name, source: 'upload' }));
       } catch (e) {
         failed++;
       }
     }
     unbusy();
     if (failed) notice(failed + ' file(s) could not be read as images.', 'error');
-    refresh();
+    await importPhotos(made);
   }
 
   function releasePhoto(photo) {
@@ -1357,6 +1625,7 @@
       const sel = buildSizeSelect(row.sizeId, false);
       sel.addEventListener('change', () => {
         row.sizeId = sel.value;
+        row.chosen = true; // set by hand, so no later change rewrites it
         persistPhoto(photo);
         refresh();
       });
@@ -1369,6 +1638,7 @@
       copies.title = 'Number of copies';
       copies.addEventListener('change', () => {
         row.copies = clamp(parseInt(copies.value, 10) || 0, 0, 500);
+        row.chosen = true;
         persistPhoto(photo);
         refresh();
       });
@@ -1497,19 +1767,21 @@
       }
       sel.appendChild(og);
     }
+    /* The photo's own size belongs in every one of these menus: it is the
+       default, and it has to be possible to come back to it. */
+    const og = document.createElement('optgroup');
+    og.label = 'Automatic';
+    const orig = document.createElement('option');
+    orig.value = '__original';
+    orig.textContent = 'Original size — as it is';
+    og.appendChild(orig);
     if (includeFill) {
-      const og = document.createElement('optgroup');
-      og.label = 'Automatic';
-      const orig = document.createElement('option');
-      orig.value = '__original';
-      orig.textContent = 'Original size — leave my photos alone';
-      og.appendChild(orig);
       const o = document.createElement('option');
       o.value = '__fill';
       o.textContent = 'Fill the sheet (largest that fits)';
       og.appendChild(o);
-      sel.appendChild(og);
     }
+    sel.insertBefore(og, sel.firstChild);
     sel.value = selected;
     return sel;
   }
@@ -1576,6 +1848,7 @@
     $('printer-custom').hidden = s.printerId !== 'custom';
     $('printer-edge').value = s.printerEdge;
     $('chk-per-photo').checked = s.perPhotoSizes;
+    $('chk-ask-import').checked = s.askOnImport;
     $('chk-show-sizes').checked = s.showSizes;
 
     document.querySelectorAll('[data-orient]').forEach((b) =>
@@ -2403,6 +2676,8 @@
   function dismiss(modal) {
     closeModal(modal);
     if (modal.id === 'modal-editor') commitEditor();
+    // Closing the size question any other way means "don't import these".
+    if (modal.id === 'modal-import') finishImport(false);
   }
 
   /* ------------------------------------------------------------ print / pdf */
@@ -2595,6 +2870,15 @@
 
     $('chk-per-photo').addEventListener('change', (e) => {
       state.settings.perPhotoSizes = e.target.checked;
+      if (e.target.checked) {
+        // Whatever is on screen now is what the rows should start as.
+        for (const photo of state.photos) {
+          const rows = photo.sizes && photo.sizes.length ? photo.sizes : [];
+          if (rows.some((r) => r.chosen)) continue;
+          photo.sizes = [defaultSizeRow()];
+          persistPhoto(photo);
+        }
+      }
       App.clearSlotCache();
       saveSettings();
       refresh();
@@ -2657,6 +2941,13 @@
       saveSettings();
       refresh();
     });
+
+    $('chk-ask-import').addEventListener('change', (e) => {
+      state.settings.askOnImport = e.target.checked;
+      saveSettings();
+    });
+
+    $('btn-import-add').addEventListener('click', () => finishImport(true));
 
     $('dpi').addEventListener('change', (e) => {
       state.settings.dpi = parseInt(e.target.value, 10);

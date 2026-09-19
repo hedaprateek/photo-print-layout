@@ -141,6 +141,9 @@
       <label class="check"><input id="chk-per-photo" type="checkbox">
         <span>Give photos their own sizes <span class="hint">set each one in the Photos list</span></span></label>
 
+      <label class="check"><input id="chk-ask-import" type="checkbox">
+        <span>Ask about sizes when I add photos <span class="hint">suggests each photo's own size</span></span></label>
+
       <p class="muted small">However many photos and sizes there are, the sheets are
          always packed to waste as little paper as possible.</p>
     </div>
@@ -427,6 +430,28 @@
     <footer class="modal-foot">
       <button class="btn btn-ghost" data-close type="button">Cancel</button>
       <button id="btn-save-keys" class="btn btn-primary" type="button">Save</button>
+    </footer>
+  </div>
+</div>
+
+<div id="modal-import" class="modal" hidden>
+  <div class="modal-card modal-wide" role="dialog" aria-modal="true" aria-labelledby="import-title">
+    <header class="modal-head">
+      <h3 id="import-title">What size should these print at?</h3>
+      <button class="icon-btn" data-close type="button" aria-label="Close">×</button>
+    </header>
+    <div class="modal-body">
+      <p class="muted small">Each one is suggested at its own size — the size its pixels
+         come to at the current print quality. Leave them as they are and nothing about
+         your photos is changed. They are arranged onto the paper afterwards.</p>
+      <div id="import-list" class="import-list"></div>
+    </div>
+    <footer class="modal-foot import-foot">
+      <label class="check"><input id="chk-import-skip" type="checkbox">
+        <span>Don't ask again <span class="hint">always use each photo's own size</span></span></label>
+      <span class="spacer"></span>
+      <button class="btn btn-ghost" data-close type="button">Cancel</button>
+      <button id="btn-import-add" class="btn btn-primary" type="button">Add photos</button>
     </footer>
   </div>
 </div>

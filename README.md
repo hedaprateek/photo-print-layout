@@ -15,11 +15,19 @@ Everything runs in your browser. Photos are never uploaded anywhere.
 (no key, no setup), search Pexels or Unsplash with a free key of your own, or
 paste an image URL. Drag entries in the list to reorder them.
 
-**That is already the whole job.** Nothing is resized, cropped, turned or
-duplicated. Each photo prints at the size its own pixels come to — a 1800×1200
-photo is 1800 ÷ 300 by 1200 ÷ 300 inches, so 152 × 102 mm — and those rectangles
-are packed into the fewest sheets they fit on. One copy of each, because copies
-are something you ask for rather than something you are given.
+**It asks what size they should print at, and suggests their own.** Each photo
+in the import is listed with the size its pixels come to — a 1800×1200 photo is
+1800 ÷ 300 by 1200 ÷ 300 inches, so 152 × 102 mm — in millimetres, inches and
+centimetres, with the resolution it will achieve. Leave them alone and nothing
+about your photos is changed. Change one and only that one changes; *Use for
+all* sets the whole batch at once. If a photo is too big for the paper you are
+on, it says so there, before it is added rather than after. *Don't ask again*
+turns the question off for good, and Settings turns it back on.
+
+**Then that is already the whole job.** Nothing is resized, cropped, turned or
+duplicated. The photos are packed into the fewest sheets they fit on, one copy
+of each, because copies are something you ask for rather than something you are
+given.
 
 **Then change whatever you want.** Everything below is an override you reach for
 when you need it, not a decision standing between you and a printed sheet.
